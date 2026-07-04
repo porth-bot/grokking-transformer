@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "grokking-transformer"
+version = "0.1.0"
+description = "A from-scratch transformer on modular addition, reproducing and dissecting grokking (delayed generalization)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["torch>=2.0", "numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "matplotlib>=3.7"]
+
+[tool.setuptools.packages.find]
+include = ["grokking*"]
+
+[tool.pytest.ini_options]
+filterwarnings = ["error::RuntimeWarning"]

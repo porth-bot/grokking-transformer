@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Artifacts: CSV logs are committed, model checkpoints are not
+runs/*.pt
+
+# OS
+.DS_Store
