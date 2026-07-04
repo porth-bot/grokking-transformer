@@ -1,7 +1,7 @@
 {
   "config": {
     "p": 97,
-    "train_frac": 0.3,
+    "train_frac": 0.6,
     "weight_decay": 1.0,
     "lr": 0.001,
     "betas": [
@@ -10,7 +10,7 @@
     ],
     "max_steps": 25000,
     "eval_every": 100,
-    "patience": 30,
+    "patience": 5,
     "seed": 0,
     "device": "mps",
     "model": {
@@ -24,10 +24,10 @@
     }
   },
   "memorize_step": 100,
-  "grok_step": 1900,
+  "grok_step": 200,
   "final_train_acc": 1.0,
   "final_test_acc": 1.0,
-  "steps_run": 11100,
-  "wall_seconds": 293.7,
+  "steps_run": 600,
+  "wall_seconds": 37.1,
   "n_params": 223360
 }

@@ -73,7 +73,9 @@ def main_grokking_figure():
     ax.set_xscale("log")
     ax.set_xlabel("step (log scale)")
     ax.set_ylabel(r"$\|\theta\|_2$ (all parameters)")
-    ax.set_title("Generalization arrives as the norm falls", loc="left")
+    if s["grok_step"]:
+        ax.axvline(s["grok_step"], color="gray", ls="--", lw=1)
+    ax.set_title("Norm rises to the transition, then decay takes over", loc="left")
     savefig(fig, "grokking_main.png")
 
 
