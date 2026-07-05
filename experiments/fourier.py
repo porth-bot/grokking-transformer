@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 from pathlib import Path
 
-from grokking.model import ModelConfig, Transformer
+from grokking.checkpoints import load_model
 
 plt.rcParams.update(
     {
@@ -41,10 +41,9 @@ plt.rcParams.update(
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = "p97_frac0.30_wd1_seed0"
-P = 97
 
 
-def embedding_spectrum(state_path):
+def embedding_spectrum(model, p):
     """Per-frequency L2 norm of the digit embeddings.
 
     E is (p, d_model) -- the '=' token row is excluded, since only digit
@@ -53,10 +52,7 @@ def embedding_spectrum(state_path):
     ||F_k||_2 over the model dimension, and the DC term k=0 (the mean
     embedding) is dropped from sparsity statistics.
     """
-    cfg = ModelConfig(p=P, vocab_size=P + 1)
-    model = Transformer(cfg)
-    model.load_state_dict(torch.load(state_path, map_location="cpu"))
-    E = model.tok_emb.weight.detach()[:P]          # (p, d_model)
+    E = model.tok_emb.weight.detach()[:p]          # (p, d_model)
     F = torch.fft.rfft(E, dim=0)                   # (p//2 + 1, d_model), complex
     return F.abs().pow(2).sum(dim=1).sqrt()        # (p//2 + 1,)
 
@@ -70,8 +66,11 @@ def top_k_energy_fraction(spec, k=5):
 
 
 def main():
-    spec_mem = embedding_spectrum(ROOT / "runs" / f"{MAIN}_memorize.pt")
-    spec_fin = embedding_spectrum(ROOT / "runs" / f"{MAIN}.pt")
+    model_mem, summary = load_model(MAIN, which="memorize")
+    model_fin, _ = load_model(MAIN, which="final")
+    p = summary["config"]["p"]
+    spec_mem = embedding_spectrum(model_mem, p)
+    spec_fin = embedding_spectrum(model_fin, p)
 
     frac_mem = top_k_energy_fraction(spec_mem)
     frac_fin = top_k_energy_fraction(spec_fin)
