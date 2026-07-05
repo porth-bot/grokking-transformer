@@ -11,8 +11,13 @@ venv/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Artifacts: CSV logs are committed, model checkpoints are not
+# Artifacts: CSV logs are committed. Model checkpoints are not, EXCEPT the two
+# from the main run that experiments/fourier.py needs to reproduce the
+# embedding-spectrum figure (and that test_checkpoints.py loads) without
+# retraining -- ~0.9 MB each, worth it for clone-and-reproduce.
 runs/*.pt
+!runs/p97_frac0.30_wd1_seed0.pt
+!runs/p97_frac0.30_wd1_seed0_memorize.pt
 
 # OS
 .DS_Store
