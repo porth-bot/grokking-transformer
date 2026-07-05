@@ -93,7 +93,12 @@ class CausalSelfAttention(nn.Module):
         mask = torch.triu(torch.ones(cfg.seq_len, cfg.seq_len, dtype=torch.bool), diagonal=1)
         self.register_buffer("causal_mask", mask)  # True where attention is forbidden
 
-    def forward(self, x):
+    def _attention(self, x):
+        """Shared core: return the attention weights (B, H, T, T) and values.
+
+        Kept as one place so ``forward`` and ``attn_weights`` (used by the
+        attention-pattern analysis) can never disagree about the arithmetic.
+        """
         B, T, C = x.shape
         q, k, v = self.qkv(x).split(C, dim=2)
         # (B, T, C) -> (B, n_heads, T, d_head)
@@ -104,9 +109,24 @@ class CausalSelfAttention(nn.Module):
         att = (q @ k.transpose(-2, -1)) / math.sqrt(self.d_head)   # (B, H, T, T)
         att = att.masked_fill(self.causal_mask[:T, :T], float("-inf"))
         att = F.softmax(att, dim=-1)
+        return att, v
+
+    def forward(self, x):
+        B, T, C = x.shape
+        att, v = self._attention(x)
         y = att @ v                                                # (B, H, T, d_head)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         return self.proj(y)
+
+    @torch.no_grad()
+    def attn_weights(self, x):
+        """Attention weight matrices (B, H, T, T) for analysis/plotting.
+
+        Row i of head h is token i's distribution over the positions it
+        attends to (j <= i under the causal mask). Not used in the forward
+        pass -- purely a read-out of the same softmax ``forward`` computes.
+        """
+        return self._attention(x)[0]
 
 
 class MLP(nn.Module):
