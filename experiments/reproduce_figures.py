@@ -6,6 +6,7 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
 
     CSV logs      -> grokking_main, grokking_loss, wd_sweep, frac_sweep   (plots.py)
     checkpoints   -> fourier_spectrum                                     (fourier.py)
+    checkpoints   -> embedding_circle                            (embedding_circle.py)
 
 It first checks that the artifacts each figure depends on are present, so a
 missing or renamed file fails loudly here rather than with a cryptic error deep
@@ -15,6 +16,7 @@ in a plotting call. Run:  python experiments/reproduce_figures.py
 import sys
 from pathlib import Path
 
+import embedding_circle
 import fourier
 import plots
 
@@ -65,6 +67,7 @@ def main():
 
     print("Regenerating checkpoint-based figures ...")
     fourier.main()
+    embedding_circle.main()
 
     print("All figures reproduced into figures/.")
     return 0
