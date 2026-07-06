@@ -90,7 +90,31 @@ fixed — so the phase in which memorization dominates stretches. At 60% data
 the "delay" nearly vanishes and grokking degenerates into ordinary learning;
 grokking is a *small-data* phenomenon.
 
-### 3. What changes inside: norm and Fourier structure
+### 3. Robustness: grokking survives a 10× learning-rate change
+
+Is the grok time an artifact of one tuned learning rate? Rerunning the main
+config (30%, wd = 1, seed 0) at lr spanning an order of magnitude
+([`lr_sweep.py`](experiments/lr_sweep.py)):
+
+| lr | memorized at | grokked at | delay |
+|---|---|---|---|
+| 3e-4 | 200 | 5,500 | 27× |
+| 1e-3 | 100 | 1,700 | 17× |
+| 3e-3 | 100 | 800 | 8× |
+
+![lr sweep](figures/lr_sweep.png)
+
+The phenomenon is robust — the network memorizes fast and generalizes late at
+every learning rate — but the grok *step* is not a physical constant: it
+scales roughly inversely with lr (a 10× larger lr groks ~7× sooner), because
+the grok step counts optimizer steps, and a larger step covers more of the
+same path per iteration. Memorization is already near-instant at all three
+lrs, so the delay multiple shrinks as lr grows while never vanishing. The
+takeaway for the rest of this repo: grok steps are only comparable **at fixed
+lr** (all other sweeps here hold lr = 1e-3), and "1,900 steps" is a property
+of the optimizer schedule, not just the task.
+
+### 4. What changes inside: norm and Fourier structure
 
 Two measurements on the main run (30%, wd = 1), same seed, same trajectory:
 

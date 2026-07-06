@@ -5,6 +5,7 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
 (``.pt`` / ``_memorize.pt``) -- back into the figures in ``figures/``:
 
     CSV logs      -> grokking_main, grokking_loss, wd_sweep, frac_sweep   (plots.py)
+    CSV logs      -> lr_sweep                                        (lr_sweep.py)
     checkpoints   -> fourier_spectrum                                     (fourier.py)
     checkpoints   -> embedding_circle                            (embedding_circle.py)
     checkpoints   -> attention_pattern                         (attention_pattern.py)
@@ -20,6 +21,7 @@ from pathlib import Path
 import attention_pattern
 import embedding_circle
 import fourier
+import lr_sweep
 import plots
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -36,6 +38,8 @@ CSV_RUNS = [
     "p97_frac0.60_wd1_seed0",
 ]
 CKPT_RUNS = [(fourier.MAIN, ["", "_memorize"])]
+# The lr-sensitivity sweep logs live in runs_lr/ (CSV/JSON only).
+LR_RUNS = [lr_sweep.cfg_for(lr).run_name() for lr in lr_sweep.LRS]
 
 
 def check_artifacts():
@@ -45,6 +49,10 @@ def check_artifacts():
         for ext in (".csv", ".json"):
             if not (RUNS / f"{name}{ext}").exists():
                 missing.append(f"runs/{name}{ext}")
+    for name in LR_RUNS:
+        for ext in (".csv", ".json"):
+            if not (lr_sweep.RUNS / f"{name}{ext}").exists():
+                missing.append(f"runs_lr/{name}{ext}")
     for name, suffixes in CKPT_RUNS:
         for s in suffixes:
             if not (RUNS / f"{name}{s}.pt").exists():
@@ -66,6 +74,7 @@ def main():
     plots.loss_figure()
     plots.wd_sweep_figure()
     plots.frac_sweep_figure()
+    lr_sweep.figure_and_table()  # from committed runs_lr/ CSVs, no retraining
 
     print("Regenerating checkpoint-based figures ...")
     fourier.main()

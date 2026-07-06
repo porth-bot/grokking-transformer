@@ -62,7 +62,12 @@ class TrainConfig:
             )
 
     def run_name(self) -> str:
-        return f"p{self.p}_frac{self.train_frac:.2f}_wd{self.weight_decay:g}_seed{self.seed}"
+        base = f"p{self.p}_frac{self.train_frac:.2f}_wd{self.weight_decay:g}_seed{self.seed}"
+        # lr joins the run identity only when it differs from the 1e-3 default,
+        # so existing default-lr run artifacts keep their names.
+        if abs(self.lr - 1e-3) > 1e-12:
+            base += f"_lr{self.lr:g}"
+        return base
 
 
 @torch.no_grad()

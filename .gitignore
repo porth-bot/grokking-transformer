@@ -18,6 +18,8 @@ venv/
 runs/*.pt
 !runs/p97_frac0.30_wd1_seed0.pt
 !runs/p97_frac0.30_wd1_seed0_memorize.pt
+# lr-sensitivity sweep commits only its CSV trajectories, not checkpoints.
+runs_lr/*.pt
 
 # OS
 .DS_Store
