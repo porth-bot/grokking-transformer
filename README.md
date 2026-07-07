@@ -114,7 +114,31 @@ takeaway for the rest of this repo: grok steps are only comparable **at fixed
 lr** (all other sweeps here hold lr = 1e-3), and "1,900 steps" is a property
 of the optimizer schedule, not just the task.
 
-### 4. What changes inside: norm and Fourier structure
+### 4. Does the delay grow with the modulus? (No — data size wins)
+
+Every run above uses $p = 97$. Repeating the main configuration (30%,
+wd = 1, seed 0, same lr) at a larger prime $p = 113$ changes two things at
+once: more residue classes and Fourier frequencies for the circuit to
+represent (harder), but 30% of the larger $p^2$ grid is more absolute
+training pairs (easier). [`modulus_scaling.py`](experiments/modulus_scaling.py):
+
+| $p$ | train pairs (30%) | memorized at | grokked at | delay |
+|---|---|---|---|---|
+| 97 | 2,823 | step 100 | step 1,900 | 19× |
+| 113 | 3,831 | step 100 | **step 600** | 6× |
+
+The larger modulus groks **sooner**, not later: memorization is instant in
+both, but generalization arrives 3× earlier at $p = 113$. The absolute
+training-set size dominates — this is the same lever as §2 (grokking is a
+small-data phenomenon), and 3,831 pairs sit further from the critical
+fraction than 2,823 do. The transition is also softer at $p = 113$: test
+accuracy is already 29% at the memorization point and climbs steadily, rather
+than sitting near chance through a long plateau. So "time-to-grok" is not a
+clean increasing function of $p$; at fixed data *fraction*, the data-quantity
+effect wins on this axis. (One seed, one extra modulus — a direction, not a
+scaling law.)
+
+### 5. What changes inside: norm and Fourier structure
 
 Two measurements on the main run (30%, wd = 1), same seed, same trajectory:
 
