@@ -19,6 +19,7 @@ import sys
 from pathlib import Path
 
 import attention_pattern
+import dropout_control
 import embedding_circle
 import fourier
 import lr_sweep
@@ -32,6 +33,7 @@ RUNS = ROOT / "runs"
 CSV_RUNS = [
     "p97_frac0.30_wd1_seed0",
     "p97_frac0.30_wd0_seed0",
+    "p97_frac0.30_wd0_seed0_do0.1",
     "p97_frac0.30_wd0.1_seed0",
     "p97_frac0.25_wd1_seed0",
     "p97_frac0.40_wd1_seed0",
@@ -75,6 +77,7 @@ def main():
     plots.wd_sweep_figure()
     plots.frac_sweep_figure()
     lr_sweep.figure_and_table()  # from committed runs_lr/ CSVs, no retraining
+    dropout_control.figure_and_table("p97_frac0.30_wd0_seed0_do0.1")
 
     print("Regenerating checkpoint-based figures ...")
     fourier.main()

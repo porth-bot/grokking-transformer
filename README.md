@@ -41,8 +41,10 @@ generalization is delayed rather than absent.
 
 Design choices that matter for the science: **full batch** (no minibatch
 noise confound), **AdamW's decoupled decay** (the regularizer under study —
-L2-through-Adam is a different object), **no dropout** (weight decay must be
-the only regularizer), and **two checkpoints per run** (memorization point
+L2-through-Adam is a different object), **no dropout by default** (so weight
+decay is the only regularizer in the main runs — though dropout is an
+available knob, used only for the regularizer control in §6), and **two
+checkpoints per run** (memorization point
 and final) so "before vs after" is a comparison within a single trajectory.
 
 ## Results
@@ -162,6 +164,32 @@ the accuracy jump (our early-stopped checkpoint showed 40%; 3k steps later,
 57%) — the "sudden" jump is a thresholding artifact of accuracy, not a
 discontinuity in the weights.
 
+### 6. Is it the norm specifically, or any regularizer? (A dropout control)
+
+Section 5 shows weight decay generalizing by pulling the weight norm down, and
+the Omnigrok picture (Liu et al. 2023) makes *norm reduction* the mechanism.
+That invites a control: swap weight decay for **dropout** — a regularizer that
+does not target the norm at all — holding frac = 0.30, seed, and lr fixed
+(**dropout 0.1, weight decay 0**).
+
+| regularizer | memorized | grokked | final test acc |
+|---|---|---|---|
+| none (wd 0) | step 100 | never | 0.29 |
+| **dropout 0.1** (wd 0) | step 200 | **step 3500** | **0.999** |
+| weight decay 1.0 | step 100 | step 1900 | 1.00 |
+
+![dropout control](figures/dropout_control.png)
+
+Dropout groks — so it is **not** weight decay specifically that is required.
+But the mechanism is visibly different: weight decay generalizes while driving
+the norm *down* (section 5), whereas under dropout the norm **rises
+monotonically** the entire time (21 → 55) and the model generalizes anyway.
+Norm reduction is therefore *sufficient but not necessary* here; a regularizer
+that instead penalizes co-adapted, memorization-friendly features reaches the
+same generalizing circuit by a different route. What the two share — and what
+the unregularized run lacks — is simply *pressure against the pure-memorization
+solution*, not a particular way of applying it.
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -192,10 +220,12 @@ retraining):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                              # 15 tests
+pytest                              # 16 tests
 python experiments/run_sweep.py     # 6 runs, ~30 min on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
+python experiments/dropout_control.py  # §6 regularizer control (~4 min: one run)
+python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 
 Committed CSV logs mean the figures are reproducible without retraining;
