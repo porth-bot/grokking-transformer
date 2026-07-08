@@ -21,9 +21,14 @@ Design choices, and why:
 - **LayerNorm written out** (mean/variance over the model dimension, then a
   learned affine): it is the one normalization this repo relies on, so it is
   implemented, not imported.
-- **No dropout**: grokking experiments are full-batch and the phenomenon
-  under study *is* the regularization story -- weight decay must be the only
-  regularizer in play.
+- **Dropout is off by default** (``dropout=0.0``): grokking experiments are
+  full-batch and the phenomenon under study *is* the regularization story, so
+  the main runs keep weight decay as the only regularizer in play. Standard
+  GPT-style dropout (embeddings + both residual branches) is *available* as a
+  config knob purely so the "does any regularizer grok, or specifically norm
+  pressure?" control (``experiments/dropout_control.py``) can swap weight
+  decay for dropout and measure the difference. At ``0.0`` every dropout layer
+  is an exact identity, so the default architecture is bit-for-bit unchanged.
 - ``nn.Linear`` / ``nn.Embedding`` are used as parameter containers; the
   attention arithmetic itself never calls a fused/library attention op
   (tests verify equivalence against PyTorch's reference implementation).
@@ -46,6 +51,7 @@ class ModelConfig:
     n_heads: int = 4
     d_mlp: int = 512
     n_layers: int = 1
+    dropout: float = 0.0   # off for the main runs; used only by the control
 
     @property
     def d_head(self) -> int:
@@ -90,6 +96,7 @@ class CausalSelfAttention(nn.Module):
         self.n_heads, self.d_head = cfg.n_heads, cfg.d_head
         self.qkv = nn.Linear(cfg.d_model, 3 * cfg.d_model, bias=False)
         self.proj = nn.Linear(cfg.d_model, cfg.d_model, bias=False)
+        self.resid_drop = nn.Dropout(cfg.dropout)
         mask = torch.triu(torch.ones(cfg.seq_len, cfg.seq_len, dtype=torch.bool), diagonal=1)
         self.register_buffer("causal_mask", mask)  # True where attention is forbidden
 
@@ -116,7 +123,7 @@ class CausalSelfAttention(nn.Module):
         att, v = self._attention(x)
         y = att @ v                                                # (B, H, T, d_head)
         y = y.transpose(1, 2).contiguous().view(B, T, C)
-        return self.proj(y)
+        return self.resid_drop(self.proj(y))
 
     @torch.no_grad()
     def attn_weights(self, x):
@@ -140,9 +147,10 @@ class MLP(nn.Module):
         super().__init__()
         self.up = nn.Linear(cfg.d_model, cfg.d_mlp)
         self.down = nn.Linear(cfg.d_mlp, cfg.d_model)
+        self.drop = nn.Dropout(cfg.dropout)
 
     def forward(self, x):
-        return self.down(F.gelu(self.up(x)))
+        return self.drop(self.down(F.gelu(self.up(x))))
 
 
 class Block(nn.Module):
@@ -173,6 +181,7 @@ class Transformer(nn.Module):
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.d_model)
         self.pos_emb = nn.Parameter(torch.zeros(cfg.seq_len, cfg.d_model))
+        self.emb_drop = nn.Dropout(cfg.dropout)
         self.blocks = nn.ModuleList(Block(cfg) for _ in range(cfg.n_layers))
         self.ln_f = LayerNorm(cfg.d_model)
         self.unembed = nn.Linear(cfg.d_model, cfg.p, bias=False)
@@ -188,7 +197,7 @@ class Transformer(nn.Module):
 
     def forward(self, tokens):
         """tokens: (B, T) int64 -> logits (B, T, p)."""
-        x = self.tok_emb(tokens) + self.pos_emb[: tokens.shape[1]]
+        x = self.emb_drop(self.tok_emb(tokens) + self.pos_emb[: tokens.shape[1]])
         for block in self.blocks:
             x = block(x)
         return self.unembed(self.ln_f(x))

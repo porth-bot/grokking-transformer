@@ -67,6 +67,10 @@ class TrainConfig:
         # so existing default-lr run artifacts keep their names.
         if abs(self.lr - 1e-3) > 1e-12:
             base += f"_lr{self.lr:g}"
+        # dropout likewise only tags the name when it is actually on (the
+        # regularizer control), leaving every wd-only run's artifacts untouched.
+        if self.model.dropout > 0:
+            base += f"_do{self.model.dropout:g}"
         return base
 
 

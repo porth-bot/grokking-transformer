@@ -67,6 +67,24 @@ def test_causal_mask_blocks_future_influence():
     assert not torch.allclose(l_base[:, 2], l_first[:, 2])  # info does flow forward
 
 
+def test_dropout_is_identity_at_zero_and_active_when_on():
+    """The dropout knob (added for the regularizer control) must not touch the
+    default architecture: at dropout=0 the network is deterministic in train
+    mode. With dropout>0 it perturbs outputs in train mode but is again the
+    identity in eval mode -- so evaluation always measures the clean model."""
+    tokens = torch.randint(0, 98, (5, 3))
+
+    torch.manual_seed(0)
+    plain = Transformer(ModelConfig(**{**CFG.__dict__, "dropout": 0.0})).train()
+    torch.testing.assert_close(plain(tokens), plain(tokens))  # deterministic
+
+    torch.manual_seed(0)
+    dropped = Transformer(ModelConfig(**{**CFG.__dict__, "dropout": 0.1})).train()
+    assert not torch.allclose(dropped(tokens), dropped(tokens))  # train: stochastic
+    dropped.eval()
+    torch.testing.assert_close(dropped(tokens), dropped(tokens))  # eval: identity
+
+
 def test_attention_rows_are_distributions():
     """Masked softmax rows must sum to 1 over the allowed prefix and put
     exactly zero mass on the future."""
