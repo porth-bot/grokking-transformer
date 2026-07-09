@@ -1,0 +1,34 @@
+{
+  "config": {
+    "p": 97,
+    "train_frac": 0.3,
+    "weight_decay": 0.0,
+    "lr": 0.001,
+    "betas": [
+      0.9,
+      0.98
+    ],
+    "max_steps": 25000,
+    "eval_every": 100,
+    "patience": 5,
+    "seed": 4,
+    "device": "mps",
+    "model": {
+      "p": 97,
+      "vocab_size": 98,
+      "seq_len": 3,
+      "d_model": 128,
+      "n_heads": 4,
+      "d_mlp": 512,
+      "n_layers": 1,
+      "dropout": 0.0
+    }
+  },
+  "memorize_step": 100,
+  "grok_step": null,
+  "final_train_acc": 1.0,
+  "final_test_acc": 0.3258427083492279,
+  "steps_run": 25000,
+  "wall_seconds": 1175.0,
+  "n_params": 223360
+}

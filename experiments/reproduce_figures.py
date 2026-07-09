@@ -24,20 +24,22 @@ import embedding_circle
 import fourier
 import lr_sweep
 import plots
+import run_sweep
+
+from grokking.train import TrainConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "runs"
 
 # Runs whose CSV/JSON the plot functions read, and whose checkpoints the
-# Fourier analysis reads. Keep in sync with plots.py / fourier.py.
+# Fourier analysis reads. The wd/frac error-bar figures consume every seed of
+# every sweep cell, so derive the list from run_sweep itself (single source of
+# truth) rather than restating it; the dropout control (§6) is the one extra.
 CSV_RUNS = [
-    "p97_frac0.30_wd1_seed0",
-    "p97_frac0.30_wd0_seed0",
+    TrainConfig(p=97, train_frac=f, weight_decay=w, seed=s).run_name()
+    for f, w, s in run_sweep.jobs()
+] + [
     "p97_frac0.30_wd0_seed0_do0.1",
-    "p97_frac0.30_wd0.1_seed0",
-    "p97_frac0.25_wd1_seed0",
-    "p97_frac0.40_wd1_seed0",
-    "p97_frac0.60_wd1_seed0",
 ]
 CKPT_RUNS = [(fourier.MAIN, ["", "_memorize"])]
 # The lr-sensitivity sweep logs live in runs_lr/ (CSV/JSON only).

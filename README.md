@@ -5,8 +5,9 @@
 A decoder-only transformer implemented from scratch (the attention arithmetic
 is written out and tested against PyTorch's fused reference) and used to
 reproduce and dissect **grokking**: on modular addition, the model reaches
-100% *training* accuracy at step 100 and stays at ~20% *test* accuracy until
-step ~1,900 — then jumps to 100%. The repo measures what controls the delay
+100% *training* accuracy at step 100 and stays near ~20% *test* accuracy for
+~1,300 steps (median over 5 seeds) — then jumps to 100%. The repo measures
+what controls the delay
 (weight decay, data fraction) and inspects what changes inside the network
 (weight norm, the Fourier structure of its embeddings) when it finally
 generalizes.
@@ -50,43 +51,52 @@ and final) so "before vs after" is a comparison within a single trajectory.
 ## Results
 
 All runs: $p = 97$, 1 layer, $d_{\text{model}} = 128$, 4 heads, lr $10^{-3}$,
-seed 0, full-batch AdamW. Logs in [`runs/`](runs/), regenerate figures with
-`python experiments/plots.py`.
+full-batch AdamW. The weight-decay and data-fraction sweeps below run **5 seeds
+per cell** and report the median with the min–max range; the mechanistic
+single-run analyses (§3–6 and the Fourier/attention/embedding read-outs) stay
+on seed 0, which is what the hero figure shows. Logs in [`runs/`](runs/),
+regenerate figures with `python experiments/plots.py`.
 
 ### 1. Weight decay controls whether — and when — grokking happens
 
-30% training data, three values of weight decay:
+30% training data, three values of weight decay (median grok step over 5 seeds,
+`[min–max]`; memorization is at step 100 in every seed):
 
-| weight decay | memorized (100% train) | grokked (99% test) | delay |
+| weight decay | memorized (100% train) | grokked (99% test), median [range] | delay |
 |---|---|---|---|
-| 0.0 | step 100 | **never** (25k-step budget) | ∞ |
-| 0.1 | step 100 | step 13,900 | 139× |
-| 1.0 | step 100 | step 1,900 | 19× |
+| 0.0 | step 100 | **never** (25k budget, all 5 seeds) | ∞ |
+| 0.1 | step 100 | 10,800 [7,600–13,900] | 108× |
+| 1.0 | step 100 | 1,300 [1,200–1,900] | 13× |
 
 ![wd sweep](figures/wd_sweep.png)
 
-The wd = 0 control memorizes identically fast, then stays memorized — test
-accuracy creeps to only ~28% by step 25k (some implicit regularization
-exists, but no transition within budget). This is the cleanest evidence in
-the repo that the delayed generalization is *driven by the regularizer*, not
-by more gradient steps on the task loss: after step ~100 the training loss
+The wd = 0 control memorizes identically fast, then stays memorized — no seed
+transitions within budget (final test accuracy 0.29–0.42 across the five, some
+implicit regularization but no grok). The seed spread never comes close to
+closing the gap between the three cells: even the slowest wd = 1 seed (1,900)
+groks before the *fastest* wd = 0.1 seed (7,600), so weight decay's ordering is
+not a seed artifact. This is the cleanest evidence in the repo that the delayed
+generalization is *driven by the regularizer*, not by more gradient steps on
+the task loss: after step ~100 the training loss
 is nearly zero and almost all subsequent change in test accuracy is the
 norm-pressure term reorganizing the network's internals.
 
 ### 2. Less data, longer trance
 
-Weight decay 1.0, four training fractions:
+Weight decay 1.0, four training fractions (median grok step over 5 seeds,
+`[min–max]`; 60% is a single-seed context point):
 
-| train fraction | grokked at step | delay over memorization |
+| train fraction | grokked at step, median [range] | delay over memorization |
 |---|---|---|
-| 25% | 3,100 | 31× |
-| 30% | 1,900 | 19× |
-| 40% | 700 | 7× |
-| 60% | 200 | 2× |
+| 25% | 2,700 [2,000–3,100] | 27× |
+| 30% | 1,300 [1,200–1,900] | 13× |
+| 40% | 300 [300–700] | 3× |
+| 60% | 200 (1 seed) | 2× |
 
 ![frac sweep](figures/frac_sweep.png)
 
-Monotone, roughly log-linear: as the training set shrinks, memorization gets
+Monotone in the medians, roughly log-linear: as the training set shrinks,
+memorization gets
 relatively cheaper (fewer pairs to store) while the general circuit's cost is
 fixed — so the phase in which memorization dominates stretches. At 60% data
 the "delay" nearly vanishes and grokking degenerates into ordinary learning;
@@ -220,8 +230,8 @@ retraining):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                              # 16 tests
-python experiments/run_sweep.py     # 6 runs, ~30 min on Apple Silicon (MPS) — resumable
+pytest                              # 22 tests
+python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
 python experiments/dropout_control.py  # §6 regularizer control (~4 min: one run)
@@ -233,9 +243,13 @@ checkpoints (`runs/*.pt`) are gitignored.
 
 ## Honest limitations
 
-- **One seed per configuration.** Time-to-grok varies across seeds; the
-  tables show trends, not error bars. The wd = 0 vs wd = 1 contrast and the
-  monotonicity in data fraction are robust in the literature.
+- **Five seeds, not a distribution.** The wd and frac sweeps now carry
+  min–max ranges over 5 seeds (§1–2), enough to show the between-cell gaps
+  survive seed noise but too few to trust the range as a real spread — treat
+  it as a rough error bar, not a confidence interval. The *mechanistic*
+  read-outs (Fourier spectrum, attention, embedding ring, §5 and appendix)
+  are still single-run (seed 0); their qualitative claims are not yet
+  seed-averaged.
 - **Architecture differs from Nanda et al.** (we use LayerNorm + GELU;
   their interp model was LN-free ReLU), which is likely part of why our
   final spectrum is sparse-but-not-extremely-sparse rather than >90%
@@ -245,7 +259,8 @@ checkpoints (`runs/*.pt`) are gitignored.
 
 ## Next
 
-- Multi-seed error bars on time-to-grok; wd × frac interaction surface.
+- wd × frac interaction surface (a coarse 2D grid); seed-averaged versions of
+  the mechanistic read-outs.
 - Progress measures *during* training (restricted/excluded loss à la Nanda)
   rather than two-checkpoint snapshots.
 - Other operations: subtraction and multiplication grok; division's
