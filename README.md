@@ -229,6 +229,37 @@ shrinking the *readout* circuit's parameters; pinning the embeddings' norm is
 neither sufficient nor the operative lever. (The embeddings supply the Fourier
 basis, but their *scale* is not what memorization exploits.)
 
+### 8. The generalizing solution is a sparse sum over frequencies (logit attribution)
+
+Sections 5–7 look at what grokking does to the *weights*. This one reads the
+model's actual **output**. If the network has learned the algorithm, its logits
+should (a) depend on $a+b$ and (b) be built from only a few frequencies — the
+angle-addition circuit $\text{logit}(a,b,c)\approx\sum_k A_k\cos\big(\tfrac{2\pi
+k}{p}(a+b-c)\big)$. Both are directly measurable on the committed checkpoints
+([`logit_attribution.py`](experiments/logit_attribution.py)): 2D-Fourier-transform
+the logit tensor $L[a,b,c]$ over the two input axes, and a function of $a+b$ puts
+all its energy on the diagonal $k_a=k_b$.
+
+| checkpoint | logit energy on the $a{+}b$ diagonal | top **3** frequencies rebuild test acc |
+|---|---|---|
+| at memorization | **12%** (diffuse) | 0.17 |
+| after grokking | **98%** (it computes the sum) | **1.00** |
+
+![logit attribution](figures/logit_attribution.png)
+
+Keeping only the top-$m$ diagonal frequencies and inverse-transforming rebuilds
+the logits from *just those frequencies* — a static, hand-built version of Nanda
+et al.'s **restricted loss** (Day 19 of this repo's roadmap makes it a training
+trajectory). Three frequencies, $k\in\{3,36,48\}$, rebuild the grokked model's
+**full 100%** test accuracy. Two further things fall out. The dominant logit
+frequencies substantially overlap the dominant *embedding* frequencies (§5) —
+the sparse basis the embeddings carry is the basis the logits are written in.
+And projecting the **memorization** checkpoint's logits onto the clean $a+b$
+subspace recovers far more test accuracy (top-10 freqs → 0.79) than the raw
+memorizing model expresses (0.16): the generalizing circuit is already forming,
+drowned out by per-pair memorization, *before* the test-accuracy jump — the
+same "gradual then sudden" story the progress measures will make quantitative.
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -259,12 +290,13 @@ retraining):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                              # 22 tests
+pytest                              # 32 tests
 python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
 python experiments/dropout_control.py  # §6 regularizer control (~4 min: one run)
 python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs; reuses the main baseline)
+python experiments/logit_attribution.py  # §8 per-frequency logit attribution (needs the checkpoints)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 

@@ -9,6 +9,7 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
     checkpoints   -> fourier_spectrum                                     (fourier.py)
     checkpoints   -> embedding_circle                            (embedding_circle.py)
     checkpoints   -> attention_pattern                         (attention_pattern.py)
+    checkpoints   -> logit_attribution                       (logit_attribution.py)
 
 It first checks that the artifacts each figure depends on are present, so a
 missing or renamed file fails loudly here rather than with a cryptic error deep
@@ -22,6 +23,7 @@ import attention_pattern
 import dropout_control
 import embedding_circle
 import fourier
+import logit_attribution
 import lr_sweep
 import plots
 import run_sweep
@@ -85,6 +87,7 @@ def main():
     fourier.main()
     embedding_circle.main()
     attention_pattern.main()
+    logit_attribution.main()
 
     print("All figures reproduced into figures/.")
     return 0
