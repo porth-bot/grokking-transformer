@@ -200,6 +200,35 @@ same generalizing circuit by a different route. What the two share — and what
 the unregularized run lacks — is simply *pressure against the pure-memorization
 solution*, not a particular way of applying it.
 
+### 7. *Where* does the norm pressure need to be? (Not the embeddings)
+
+Section 6 says pressure against memorization is what matters. But "the weight
+norm" is the norm of *every* parameter — so does the decay need to act on the
+**embeddings** (the token/position tables, where the Fourier structure lives),
+on the **rest** of the network (attention + MLP + unembed, which read that
+structure out), or on both at once? This ablation holds the main config fixed
+(frac 0.30, wd 1.0, seed 0) and changes only *which* parameters weight decay is
+applied to; the untargeted group trains at wd 0.
+
+| weight-decay scope | memorized | grokked (99% test) | final test |
+|---|---|---|---|
+| decay everything (main) | step 100 | step 1900 | 1.00 |
+| decay **non-embeddings only** | step 100 | **step 1800** | 1.00 |
+| decay **embeddings only** | step 100 | **never** (15k steps) | 0.36 |
+
+![weight-decay scope](figures/wd_scope.png)
+
+The pressure that matters is on the **non-embedding** weights. Decaying them
+alone reproduces the full-decay run almost exactly (grok step 1800 vs 1900, the
+two curves overlap). Decaying only the embeddings does essentially nothing: the
+model never groks in 15k steps, because the rest of the network — now
+unconstrained — keeps its large memorization weights, and the total norm climbs
+without bound ($\|\theta\|$ balloons from 21 to **287**, the green curve, while
+both grokking runs hold it near 20–40). Weight decay drives grokking by
+shrinking the *readout* circuit's parameters; pinning the embeddings' norm is
+neither sufficient nor the operative lever. (The embeddings supply the Fourier
+basis, but their *scale* is not what memorization exploits.)
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -235,6 +264,7 @@ python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on A
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
 python experiments/dropout_control.py  # §6 regularizer control (~4 min: one run)
+python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs; reuses the main baseline)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 
