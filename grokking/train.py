@@ -42,6 +42,7 @@ class TrainConfig:
     p: int = 97
     train_frac: float = 0.4
     weight_decay: float = 1.0
+    wd_scope: str = "all"      # {"all", "embeddings", "non_embeddings"}
     lr: float = 1e-3
     betas: tuple = (0.9, 0.98)
     max_steps: int = 30_000
@@ -71,6 +72,11 @@ class TrainConfig:
         # regularizer control), leaving every wd-only run's artifacts untouched.
         if self.model.dropout > 0:
             base += f"_do{self.model.dropout:g}"
+        # weight-decay scope tags the name only when decay is restricted to a
+        # parameter subset, so the default "decay everything" runs keep their
+        # existing artifact names.
+        if self.wd_scope != "all":
+            base += f"_wds{self.wd_scope}"
         return base
 
 
@@ -86,6 +92,39 @@ def evaluate(model, tokens, targets):
 @torch.no_grad()
 def weight_norm(model) -> float:
     return math.sqrt(sum(float(p.pow(2).sum()) for p in model.parameters()))
+
+
+# The two embedding tensors -- the token lookup table and the learned
+# positional embeddings. Everything else (attention, MLP, LayerNorm affines,
+# unembed) is "non-embedding". Used to scope weight decay in the ablation
+# that asks *which* parameters' norm pressure drives grokking.
+EMBEDDING_PARAMS = ("tok_emb.weight", "pos_emb")
+
+
+def weight_decay_groups(model, weight_decay, scope):
+    """AdamW parameter groups that apply ``weight_decay`` only to ``scope``.
+
+    ``scope`` is one of:
+      - ``"all"``            -> ``None`` (caller uses a single default group;
+                                behavior is bit-for-bit the standard run),
+      - ``"embeddings"``     -> decay only ``tok_emb.weight`` and ``pos_emb``,
+      - ``"non_embeddings"`` -> decay everything *except* those two.
+
+    The untargeted group gets ``weight_decay=0`` so it trains with plain Adam
+    dynamics, isolating the effect of norm pressure on the targeted subset.
+    """
+    if scope == "all":
+        return None
+    if scope not in ("embeddings", "non_embeddings"):
+        raise ValueError(f"unknown wd_scope {scope!r}")
+    emb, rest = [], []
+    for name, p in model.named_parameters():
+        (emb if name in EMBEDDING_PARAMS else rest).append(p)
+    decayed, free = (emb, rest) if scope == "embeddings" else (rest, emb)
+    return [
+        {"params": decayed, "weight_decay": weight_decay},
+        {"params": free, "weight_decay": 0.0},
+    ]
 
 
 def train(cfg: TrainConfig, out_dir="runs", verbose=True):
@@ -104,9 +143,14 @@ def train(cfg: TrainConfig, out_dir="runs", verbose=True):
     te_x, te_y = te_x.to(device), te_y.to(device)
 
     model = Transformer(cfg.model).to(device)
-    opt = torch.optim.AdamW(
-        model.parameters(), lr=cfg.lr, betas=cfg.betas, weight_decay=cfg.weight_decay
-    )
+    groups = weight_decay_groups(model, cfg.weight_decay, cfg.wd_scope)
+    if groups is None:
+        opt = torch.optim.AdamW(
+            model.parameters(), lr=cfg.lr, betas=cfg.betas,
+            weight_decay=cfg.weight_decay,
+        )
+    else:
+        opt = torch.optim.AdamW(groups, lr=cfg.lr, betas=cfg.betas)
 
     out = Path(out_dir)
     out.mkdir(exist_ok=True)
