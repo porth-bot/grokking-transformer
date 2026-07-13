@@ -34,24 +34,15 @@ Run:  python experiments/logit_attribution.py   (after run_sweep.py)
 
 import numpy as np
 import torch
-import matplotlib
-
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
 
 from pathlib import Path
 
 from grokking.checkpoints import load_model
 from grokking.data import modular_addition_dataset, train_test_split
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
-        "axes.titlesize": 10, "axes.labelsize": 9,
-        "axes.spines.top": False, "axes.spines.right": False,
-        "legend.frameon": False,
-    }
-)
+# matplotlib is imported lazily inside _figure() (it is an experiments/dev dep,
+# absent from the numpy+torch CI job) so that tests can reuse the analysis
+# helpers below without pulling in a plotting dependency.
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = "p97_frac0.30_wd1_seed0"
@@ -144,6 +135,20 @@ def main():
 
 
 def _figure(out, p):
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    plt.rcParams.update(
+        {
+            "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
+            "axes.titlesize": 10, "axes.labelsize": 9,
+            "axes.spines.top": False, "axes.spines.right": False,
+            "legend.frameon": False,
+        }
+    )
+
     fin, mem = out["final"], out["memorize"]
     K = (p - 1) // 2
     ks = np.arange(1, K + 1)
