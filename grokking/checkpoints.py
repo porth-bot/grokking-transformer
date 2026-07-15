@@ -15,9 +15,12 @@ Typical use::
     model, _       = load_model("p97_frac0.30_wd1_seed0", which="memorize")
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import fields
 from pathlib import Path
+from typing import Any
 
 import torch
 
@@ -26,13 +29,14 @@ from .model import ModelConfig, Transformer
 DEFAULT_RUNS = Path(__file__).resolve().parent.parent / "runs"
 
 
-def load_summary(run_name, runs_dir=DEFAULT_RUNS):
+def load_summary(run_name: str, runs_dir: Path = DEFAULT_RUNS) -> dict[str, Any]:
     """Read the committed ``<run_name>.json`` summary (config + results)."""
     with open(Path(runs_dir) / f"{run_name}.json") as f:
-        return json.load(f)
+        summary: dict[str, Any] = json.load(f)
+    return summary
 
 
-def model_config_from_summary(summary):
+def model_config_from_summary(summary: dict[str, Any]) -> ModelConfig:
     """Reconstruct the exact ModelConfig a run was trained with.
 
     Only keys that are real ModelConfig fields are used (``d_head`` is a derived
@@ -43,14 +47,21 @@ def model_config_from_summary(summary):
     return ModelConfig(**{k: v for k, v in saved.items() if k in valid})
 
 
-def checkpoint_path(run_name, which="final", runs_dir=DEFAULT_RUNS):
+def checkpoint_path(
+    run_name: str, which: str = "final", runs_dir: Path = DEFAULT_RUNS
+) -> Path:
     if which not in ("final", "memorize"):
         raise ValueError("which must be 'final' or 'memorize'")
     suffix = "" if which == "final" else "_memorize"
     return Path(runs_dir) / f"{run_name}{suffix}.pt"
 
 
-def load_model(run_name, which="final", runs_dir=DEFAULT_RUNS, map_location="cpu"):
+def load_model(
+    run_name: str,
+    which: str = "final",
+    runs_dir: Path = DEFAULT_RUNS,
+    map_location: str = "cpu",
+) -> tuple[Transformer, dict[str, Any]]:
     """Rebuild the model for a run and load its weights.
 
     Parameters

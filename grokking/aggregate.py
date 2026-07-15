@@ -14,10 +14,19 @@ the union of their step lists is itself a regular grid.
 Pure NumPy, no I/O, so the aggregation logic is unit-tested directly.
 """
 
+from __future__ import annotations
+
+from typing import Sequence
+
 import numpy as np
 
 
-def align_and_aggregate(steps_list, values_list, lo_pct=25.0, hi_pct=75.0):
+def align_and_aggregate(
+    steps_list: Sequence[Sequence[int]],
+    values_list: Sequence[Sequence[float]],
+    lo_pct: float = 25.0,
+    hi_pct: float = 75.0,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Median and percentile band of a per-seed metric on a shared step grid.
 
     Parameters
@@ -39,21 +48,23 @@ def align_and_aggregate(steps_list, values_list, lo_pct=25.0, hi_pct=75.0):
     grid = np.array(sorted(set().union(*(set(map(int, s)) for s in steps_list))))
     mat = np.empty((len(values_list), grid.size))
     for i, (s, v) in enumerate(zip(steps_list, values_list)):
-        s = np.asarray(s)
-        v = np.asarray(v, dtype=float)
-        if s.size != v.size:
+        steps = np.asarray(s)
+        vals = np.asarray(v, dtype=float)
+        if steps.size != vals.size:
             raise ValueError(f"seed {i}: steps/values length mismatch")
         # For each grid step, take the most recent logged eval at or before it;
         # clip holds the last value for grid steps beyond this seed's end.
-        idx = np.clip(np.searchsorted(s, grid, side="right") - 1, 0, v.size - 1)
-        mat[i] = v[idx]
+        idx = np.clip(np.searchsorted(steps, grid, side="right") - 1, 0, vals.size - 1)
+        mat[i] = vals[idx]
     median = np.median(mat, axis=0)
     lo = np.percentile(mat, lo_pct, axis=0)
     hi = np.percentile(mat, hi_pct, axis=0)
     return grid, median, lo, hi
 
 
-def summarize(values):
+def summarize(
+    values: Sequence[float | None],
+) -> tuple[float | None, float | None, float | None]:
     """(median, min, max) of a per-seed scalar (e.g. grok step), ignoring None.
 
     Returns ``(None, None, None)`` if every seed is ``None`` (e.g. a control
@@ -66,7 +77,9 @@ def summarize(values):
     return float(np.median(arr)), float(arr.min()), float(arr.max())
 
 
-def fmt_median_range(values, none_label="never"):
+def fmt_median_range(
+    values: Sequence[float | None], none_label: str = "never"
+) -> str:
     """Human-readable ``median [min–max]`` for a table cell.
 
     ``never`` seeds (``None``) are counted: an all-``None`` cell renders as the

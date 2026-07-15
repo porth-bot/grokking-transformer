@@ -24,13 +24,17 @@ Choices that matter:
   `patience` consecutive evals, so a lucky eval can't truncate the run.
 """
 
+from __future__ import annotations
+
 import json
 import math
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from .data import modular_addition_dataset, train_test_split
@@ -44,7 +48,7 @@ class TrainConfig:
     weight_decay: float = 1.0
     wd_scope: str = "all"      # {"all", "embeddings", "non_embeddings"}
     lr: float = 1e-3
-    betas: tuple = (0.9, 0.98)
+    betas: tuple[float, float] = (0.9, 0.98)
     max_steps: int = 30_000
     eval_every: int = 100
     patience: int = 5          # consecutive >=99.9% test evals before stopping
@@ -52,7 +56,7 @@ class TrainConfig:
     device: str = ""           # "" -> auto: cuda > mps > cpu
     model: ModelConfig = field(default_factory=ModelConfig)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.model.p = self.p
         self.model.vocab_size = self.p + 1
         if not self.device:
@@ -81,7 +85,9 @@ class TrainConfig:
 
 
 @torch.no_grad()
-def evaluate(model, tokens, targets):
+def evaluate(
+    model: Transformer, tokens: torch.Tensor, targets: torch.Tensor
+) -> tuple[float, float]:
     """Loss and accuracy from the logits at the '=' position."""
     logits = model(tokens)[:, -1, :]
     loss = F.cross_entropy(logits, targets)
@@ -90,7 +96,7 @@ def evaluate(model, tokens, targets):
 
 
 @torch.no_grad()
-def weight_norm(model) -> float:
+def weight_norm(model: nn.Module) -> float:
     return math.sqrt(sum(float(p.pow(2).sum()) for p in model.parameters()))
 
 
@@ -101,7 +107,9 @@ def weight_norm(model) -> float:
 EMBEDDING_PARAMS = ("tok_emb.weight", "pos_emb")
 
 
-def weight_decay_groups(model, weight_decay, scope):
+def weight_decay_groups(
+    model: nn.Module, weight_decay: float, scope: str
+) -> list[dict[str, Any]] | None:
     """AdamW parameter groups that apply ``weight_decay`` only to ``scope``.
 
     ``scope`` is one of:
@@ -117,7 +125,8 @@ def weight_decay_groups(model, weight_decay, scope):
         return None
     if scope not in ("embeddings", "non_embeddings"):
         raise ValueError(f"unknown wd_scope {scope!r}")
-    emb, rest = [], []
+    emb: list[nn.Parameter] = []
+    rest: list[nn.Parameter] = []
     for name, p in model.named_parameters():
         (emb if name in EMBEDDING_PARAMS else rest).append(p)
     decayed, free = (emb, rest) if scope == "embeddings" else (rest, emb)
@@ -127,7 +136,9 @@ def weight_decay_groups(model, weight_decay, scope):
     ]
 
 
-def train(cfg: TrainConfig, out_dir="runs", verbose=True):
+def train(
+    cfg: TrainConfig, out_dir: str = "runs", verbose: bool = True
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run one grokking experiment; returns the history and summary dict.
 
     Writes ``<out_dir>/<run_name>.csv`` (the training trajectory),

@@ -13,12 +13,14 @@ encoded as the token sequence [a, b, =] with the answer supervised at the
   what makes the delayed generalization *inspectable* rather than mysterious.
 """
 
+from __future__ import annotations
+
 import torch
 
 EQ_OFFSET = 0  # "=" token id is p (digits occupy 0..p-1)
 
 
-def modular_addition_dataset(p: int):
+def modular_addition_dataset(p: int) -> tuple[torch.Tensor, torch.Tensor]:
     """All p^2 examples of (a + b) mod p.
 
     Returns
@@ -34,7 +36,9 @@ def modular_addition_dataset(p: int):
     return tokens, targets
 
 
-def train_test_split(tokens, targets, train_frac: float, seed: int):
+def train_test_split(
+    tokens: torch.Tensor, targets: torch.Tensor, train_frac: float, seed: int
+) -> tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]:
     """Deterministic random partition of the full example universe.
 
     The split is a function of (seed, train_frac) only, so every sweep

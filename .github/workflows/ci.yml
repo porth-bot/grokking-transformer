@@ -15,5 +15,9 @@ jobs:
           python-version: "3.12"
       # CPU wheel keeps the install small; tests run on CPU
       - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - run: pip install -e . pytest
+      - run: pip install -e . pytest "mypy>=1.8"
       - run: pytest -q
+      # Static type check of the public package (torch ships its own inline
+      # types). CI already pins 3.12, so no version gate is needed here.
+      - name: type check (mypy)
+        run: mypy

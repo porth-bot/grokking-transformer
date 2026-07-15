@@ -12,10 +12,19 @@ license = { text = "MIT" }
 dependencies = ["torch>=2.0", "numpy>=1.24"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0", "matplotlib>=3.7"]
+dev = ["pytest>=7.0", "matplotlib>=3.7", "mypy>=1.8"]
 
 [tool.setuptools.packages.find]
 include = ["grokking*"]
 
 [tool.pytest.ini_options]
 filterwarnings = ["error::RuntimeWarning"]
+
+[tool.mypy]
+# Type-check the public package. The experiments and tests carry no annotation
+# contract, so they are out of scope. torch ships its own inline types (py.typed);
+# other third-party imports are not checked here.
+files = ["grokking"]
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true

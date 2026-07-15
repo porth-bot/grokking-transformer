@@ -34,6 +34,8 @@ Design choices, and why:
   (tests verify equivalence against PyTorch's reference implementation).
 """
 
+from __future__ import annotations
+
 import math
 from dataclasses import dataclass
 
@@ -67,13 +69,13 @@ class LayerNorm(nn.Module):
     Biased variance (1/N) matches torch.nn.functional.layer_norm.
     """
 
-    def __init__(self, d_model, eps=1e-5):
+    def __init__(self, d_model: int, eps: float = 1e-5) -> None:
         super().__init__()
         self.gamma = nn.Parameter(torch.ones(d_model))
         self.beta = nn.Parameter(torch.zeros(d_model))
         self.eps = eps
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         mean = x.mean(dim=-1, keepdim=True)
         var = x.var(dim=-1, keepdim=True, unbiased=False)
         return (x - mean) / torch.sqrt(var + self.eps) * self.gamma + self.beta
@@ -91,7 +93,9 @@ class CausalSelfAttention(nn.Module):
     over the allowed prefix.
     """
 
-    def __init__(self, cfg: ModelConfig):
+    causal_mask: torch.Tensor  # registered buffer; declared so mypy sees it
+
+    def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.n_heads, self.d_head = cfg.n_heads, cfg.d_head
         self.qkv = nn.Linear(cfg.d_model, 3 * cfg.d_model, bias=False)
@@ -100,7 +104,7 @@ class CausalSelfAttention(nn.Module):
         mask = torch.triu(torch.ones(cfg.seq_len, cfg.seq_len, dtype=torch.bool), diagonal=1)
         self.register_buffer("causal_mask", mask)  # True where attention is forbidden
 
-    def _attention(self, x):
+    def _attention(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         """Shared core: return the attention weights (B, H, T, T) and values.
 
         Kept as one place so ``forward`` and ``attn_weights`` (used by the
@@ -118,7 +122,7 @@ class CausalSelfAttention(nn.Module):
         att = F.softmax(att, dim=-1)
         return att, v
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         B, T, C = x.shape
         att, v = self._attention(x)
         y = att @ v                                                # (B, H, T, d_head)
@@ -126,7 +130,7 @@ class CausalSelfAttention(nn.Module):
         return self.resid_drop(self.proj(y))
 
     @torch.no_grad()
-    def attn_weights(self, x):
+    def attn_weights(self, x: torch.Tensor) -> torch.Tensor:
         """Attention weight matrices (B, H, T, T) for analysis/plotting.
 
         Row i of head h is token i's distribution over the positions it
@@ -143,25 +147,25 @@ class MLP(nn.Module):
     frequency components" nonlinearity lives (Nanda et al. 2023).
     """
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.up = nn.Linear(cfg.d_model, cfg.d_mlp)
         self.down = nn.Linear(cfg.d_mlp, cfg.d_model)
         self.drop = nn.Dropout(cfg.dropout)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.drop(self.down(F.gelu(self.up(x))))
 
 
 class Block(nn.Module):
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.ln1 = LayerNorm(cfg.d_model)
         self.attn = CausalSelfAttention(cfg)
         self.ln2 = LayerNorm(cfg.d_model)
         self.mlp = MLP(cfg)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x + self.attn(self.ln1(x))
         x = x + self.mlp(self.ln2(x))
         return x
@@ -176,7 +180,7 @@ class Transformer(nn.Module):
     model must write the sum.
     """
 
-    def __init__(self, cfg: ModelConfig):
+    def __init__(self, cfg: ModelConfig) -> None:
         super().__init__()
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.d_model)
@@ -189,13 +193,13 @@ class Transformer(nn.Module):
         nn.init.normal_(self.pos_emb, std=0.02)
 
     @staticmethod
-    def _init(module):
+    def _init(module: nn.Module) -> None:
         if isinstance(module, (nn.Linear, nn.Embedding)):
             nn.init.normal_(module.weight, std=0.02)
             if isinstance(module, nn.Linear) and module.bias is not None:
                 nn.init.zeros_(module.bias)
 
-    def forward(self, tokens):
+    def forward(self, tokens: torch.Tensor) -> torch.Tensor:
         """tokens: (B, T) int64 -> logits (B, T, p)."""
         x = self.emb_drop(self.tok_emb(tokens) + self.pos_emb[: tokens.shape[1]])
         for block in self.blocks:
