@@ -337,6 +337,30 @@ arXiv:2301.05217 (Fourier circuit, progress measures); Liu et al. (2023)
 Hutter (2019) (AdamW). Roles and derivations in
 [`theory/notes.md`](theory/notes.md).
 
+## Part of a from-scratch series
+
+Same bar in each: the core written out by hand, every non-obvious claim checked
+against a closed form or an independent oracle, limitations stated rather than
+buried.
+
+| Repo | Built from scratch |
+| --- | --- |
+| **grokking-transformer** *(this repo)* | A transformer that groks modular arithmetic, and the Fourier circuit it learns |
+| [mcmc-from-scratch](https://github.com/porth-bot/mcmc-from-scratch) | Metropolis-Hastings, Gibbs, HMC, MALA, parallel tempering — validated against exact posteriors |
+| [gp-from-scratch](https://github.com/porth-bot/gp-from-scratch) | GP regression, kernels with hand-derived gradients, ML-II, and the NTK/NNGP wide-network correspondence |
+| [pinn-from-scratch](https://github.com/porth-bot/pinn-from-scratch) | Physics-informed networks: exact autograd PDE residuals against closed-form solutions |
+
+The nearest neighbour is pinn-from-scratch, and for a reason that goes past
+both being PyTorch: both read a trained network in the frequency domain, and
+both find the story is in the *trajectory* rather than the endpoint. Here the
+angle-addition circuit is already forming underneath the memorization, before
+the test accuracy moves (§8: restricting the memorizing model's logits to the
+$a+b$ subspace recovers 0.79 accuracy where the raw model gets 0.16). There,
+low frequencies are fit first and high ones lag by an order of magnitude per
+octave — with the same caveat that the ordering is invisible if you only look
+at the converged model. The NTK machinery behind that argument is derived from
+scratch in gp-from-scratch §6–7.
+
 ## Provenance
 
 Built as a study resource: implemented from scratch with AI assistance
