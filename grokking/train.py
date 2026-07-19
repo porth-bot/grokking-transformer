@@ -81,6 +81,11 @@ class TrainConfig:
         # existing artifact names.
         if self.wd_scope != "all":
             base += f"_wds{self.wd_scope}"
+        # head count tags the name only when it differs from the 4-head default,
+        # so the main-run artifacts (used by every other experiment) are untouched
+        # and only the head-count ablation's 1-/2-head runs get a suffix.
+        if self.model.n_heads != 4:
+            base += f"_h{self.model.n_heads}"
         return base
 
 

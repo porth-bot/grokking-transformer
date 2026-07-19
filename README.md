@@ -260,6 +260,35 @@ memorizing model expresses (0.16): the generalizing circuit is already forming,
 drowned out by per-pair memorization, *before* the test-accuracy jump — the
 same "gradual then sudden" story the progress measures will make quantitative.
 
+### 9. Does grokking need multiple heads? (No — one wide head groks fastest)
+
+The main runs use 4 heads. But modular addition has a single known mechanism —
+embed each input on a circle, add the angles, read off the sum by interference
+(§8) — and nothing in it obviously needs the representation split across heads.
+Holding the main config fixed (frac 0.30, wd 1.0, seed 0) and varying only
+`n_heads` with `d_model` pinned at 128 (so head width tracks the count):
+
+| `n_heads` | `d_head` | memorize | grok | final test |
+|---|---|---|---|---|
+| 1 | 128 | 100 | **400** | 1.000 |
+| 2 | 64 | 100 | 900 | 1.000 |
+| 4 | 32 | 100 | 1900 | 1.000 |
+
+![head count](figures/head_count.png)
+
+All three grok to 100% — so grokking on this task does **not** require multiple
+heads; a single head is enough. And at seed 0 the grok delay *increases*
+monotonically with head count: the single wide head (`d_head` 128) forms the
+circuit fastest, and splitting the same 128 dimensions into more, narrower heads
+slows the transition roughly 2× per doubling. The likely reason is that the
+one-head circuit lives in a single attention pattern, while more heads must
+coordinate the same computation across a partitioned residual stream. **Caveat**:
+this is one seed, and the grok time has real seed spread (the 4-head main run is
+1300 [1200–1900] over five seeds, §1); the ~5× span here exceeds that band so the
+ordering is likely genuine, but a full multi-seed sweep — not run here — is what
+would nail it. Reuses the committed 4-head main run; only the 1-/2-head runs are
+computed ([`head_count.py`](experiments/head_count.py)).
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the

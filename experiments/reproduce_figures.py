@@ -22,6 +22,7 @@ from pathlib import Path
 import attention_pattern
 import dropout_control
 import embedding_circle
+import head_count
 import fourier
 import logit_attribution
 import lr_sweep
@@ -42,6 +43,8 @@ CSV_RUNS = [
     for f, w, s in run_sweep.jobs()
 ] + [
     "p97_frac0.30_wd0_seed0_do0.1",
+    "p97_frac0.30_wd1_seed0_h1",   # head-count ablation (§9); 4-head reuses main
+    "p97_frac0.30_wd1_seed0_h2",
 ]
 CKPT_RUNS = [(fourier.MAIN, ["", "_memorize"])]
 # The lr-sensitivity sweep logs live in runs_lr/ (CSV/JSON only).
@@ -82,6 +85,9 @@ def main():
     plots.frac_sweep_figure()
     lr_sweep.figure_and_table()  # from committed runs_lr/ CSVs, no retraining
     dropout_control.figure_and_table("p97_frac0.30_wd0_seed0_do0.1")
+    head_count.figure_and_table({1: "p97_frac0.30_wd1_seed0_h1",
+                                 2: "p97_frac0.30_wd1_seed0_h2",
+                                 4: "p97_frac0.30_wd1_seed0"})
 
     print("Regenerating checkpoint-based figures ...")
     fourier.main()
