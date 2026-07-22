@@ -249,8 +249,7 @@ all its energy on the diagonal $k_a=k_b$.
 
 Keeping only the top-$m$ diagonal frequencies and inverse-transforming rebuilds
 the logits from *just those frequencies* — a static, hand-built version of Nanda
-et al.'s **restricted loss** (Day 19 of this repo's roadmap makes it a training
-trajectory). Three frequencies, $k\in\{3,36,48\}$, rebuild the grokked model's
+et al.'s **restricted loss** (§10 makes it a training trajectory). Three frequencies, $k\in\{3,36,48\}$, rebuild the grokked model's
 **full 100%** test accuracy. Two further things fall out. The dominant logit
 frequencies substantially overlap the dominant *embedding* frequencies (§5) —
 the sparse basis the embeddings carry is the basis the logits are written in.
@@ -289,6 +288,47 @@ ordering is likely genuine, but a full multi-seed sweep — not run here — is 
 would nail it. Reuses the committed 4-head main run; only the 1-/2-head runs are
 computed ([`head_count.py`](experiments/head_count.py)).
 
+### 10. The circuit forms *gradually*, before the jump (progress measures)
+
+Sections 5 and 8 read the Fourier structure of *two* checkpoints (memorization
+and final). This section makes it a **trajectory**: rerun the main config with
+per-eval instrumentation and log Nanda et al.'s progress measures at every step,
+watching the generalizing circuit form continuously under the flat test-accuracy
+plateau. The instrumentation is a one-line `on_eval` hook into the trainer that
+snapshots the (tiny) model at each eval; the key `a+b` frequencies are then read
+off the *final* model (here $k\in\{5,14,20,36,38\}$) and held fixed across the
+trajectory, so we track the same circuit forming rather than a moving target.
+Two of the measures ablate the logits in the 2D-Fourier basis of §8:
+
+- **restricted loss** — keep *only* those 5 key frequencies of $a+b$;
+- **excluded loss** — remove exactly those 5 (all else kept).
+
+Both are computed over all $p^2$ pairs — mechanism measures, decoupled from the
+train/test split ([`progress_measures.py`](experiments/progress_measures.py)).
+
+![progress measures](figures/progress_measures.png)
+
+The read-out (main config, seed 0, CPU rerun; grok at ~1900):
+
+- **The generalizing circuit is the better predictor *before* the jump.** At the
+  memorization point (step 100), the full model's **test loss is 5.03** yet the
+  **restricted loss is 4.10** — projecting onto just the 5 key frequencies is
+  already ~0.9 nats *better* than the whole memorizing model, and it keeps
+  falling smoothly all through the plateau (to 2.6 by step 1400) while test
+  accuracy is still stuck near 15%. The circuit is being built continuously; the
+  accuracy jump is when it finally dominates.
+- **Embedding structure rises gradually**, from 14% of the spectral energy in
+  its top 5 frequencies at memorization to ~47% by the end, beginning to climb
+  before the accuracy step (right panel) — the same sparsification §5 sees
+  between two checkpoints, now resolved in time.
+- **The model genuinely depends on those frequencies.** After grokking the full
+  test loss reaches ~$10^{-2}$, but the *excluded* loss stays near 1 — remove the
+  5 key frequencies and the solution collapses.
+
+This is the quantitative version of §8's static hint ("the circuit is already
+forming under the memorization, before the test-accuracy jump"). Because the
+trajectory CSV is committed, the figure reproduces with no retraining.
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -319,13 +359,14 @@ retraining):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                              # 32 tests
+pytest                              # 39 tests
 python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
 python experiments/dropout_control.py  # §6 regularizer control (~4 min: one run)
 python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs; reuses the main baseline)
 python experiments/logit_attribution.py  # §8 per-frequency logit attribution (needs the checkpoints)
+python experiments/progress_measures.py  # §10 trajectory of progress measures (reruns the main config, ~6 min CPU)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 
@@ -352,8 +393,6 @@ checkpoints (`runs/*.pt`) are gitignored.
 
 - wd × frac interaction surface (a coarse 2D grid); seed-averaged versions of
   the mechanistic read-outs.
-- Progress measures *during* training (restricted/excluded loss à la Nanda)
-  rather than two-checkpoint snapshots.
 - Other operations: subtraction and multiplication grok; division's
   structure differs — a natural comparative study.
 

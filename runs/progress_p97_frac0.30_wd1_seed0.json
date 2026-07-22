@@ -1,0 +1,13 @@
+{
+  "key_freqs": [
+    5,
+    14,
+    20,
+    36,
+    38
+  ],
+  "k_emb": 5,
+  "memorize_step": 100,
+  "grok_step": 1900,
+  "steps_run": 4900
+}
