@@ -23,3 +23,8 @@ runs_lr/*.pt
 
 # OS
 .DS_Store
+
+# Throwaway training side-artifacts from the progress-measure run (the
+# committed output is runs/progress_*.csv; the trainer would otherwise reuse
+# the main run name and overwrite it).
+runs_progress/

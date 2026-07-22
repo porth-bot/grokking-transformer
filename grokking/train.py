@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import math
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -142,13 +143,22 @@ def weight_decay_groups(
 
 
 def train(
-    cfg: TrainConfig, out_dir: str = "runs", verbose: bool = True
+    cfg: TrainConfig,
+    out_dir: str = "runs",
+    verbose: bool = True,
+    on_eval: Callable[[int, Transformer], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Run one grokking experiment; returns the history and summary dict.
 
     Writes ``<out_dir>/<run_name>.csv`` (the training trajectory),
     ``.json`` (config + summary), and ``.pt`` / ``_memorize.pt``
     (final / memorization-point checkpoints).
+
+    ``on_eval``, if given, is called ``on_eval(step, model)`` at every eval
+    step (model in eval mode), once per appended history row and in the same
+    order -- the hook the Day-19 progress-measure experiment uses to snapshot
+    the trajectory for post-hoc Fourier instrumentation. Default ``None`` leaves
+    the standard run bit-for-bit unchanged (no call, no artifact difference).
     """
     torch.manual_seed(cfg.seed)
     device = torch.device(cfg.device)
@@ -192,6 +202,8 @@ def train(
                     "weight_norm": weight_norm(model),
                 }
             )
+            if on_eval is not None:
+                on_eval(step, model)
             if memorize_step is None and tr_acc >= 0.999:
                 memorize_step = step
                 torch.save(model.state_dict(), out / f"{name}_memorize.pt")
