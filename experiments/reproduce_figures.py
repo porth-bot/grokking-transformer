@@ -26,6 +26,7 @@ import head_count
 import fourier
 import logit_attribution
 import lr_sweep
+import operations
 import plots
 import progress_measures
 import run_sweep
@@ -46,6 +47,11 @@ CSV_RUNS = [
     "p97_frac0.30_wd0_seed0_do0.1",
     "p97_frac0.30_wd1_seed0_h1",   # head-count ablation (§9); 4-head reuses main
     "p97_frac0.30_wd1_seed0_h2",
+] + [
+    # operations comparison (§11): sub/mul at wd {1.0, 0.1}; add reuses the
+    # main-run and wd0.1 CSVs already listed above.
+    operations.cfg_for(op, wd).run_name()
+    for wd in operations.WEIGHT_DECAYS for op in ("sub", "mul")
 ]
 CKPT_RUNS = [(fourier.MAIN, ["", "_memorize"])]
 # The lr-sensitivity sweep logs live in runs_lr/ (CSV/JSON only).
@@ -96,6 +102,7 @@ def main():
                                  2: "p97_frac0.30_wd1_seed0_h2",
                                  4: "p97_frac0.30_wd1_seed0"})
     progress_measures.figure()  # §10, from the committed progress trajectory CSV
+    operations.figure_and_table()  # §11, sub/mul vs add from committed CSVs
 
     print("Regenerating checkpoint-based figures ...")
     fourier.main()

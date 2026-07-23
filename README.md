@@ -329,6 +329,61 @@ This is the quantitative version of §8's static hint ("the circuit is already
 forming under the memorization, before the test-accuracy jump"). Because the
 trajectory CSV is committed, the figure reproduces with no retraining.
 
+### 11. Other operations: is it addition, or the group structure? (Subtraction and multiplication)
+
+Everything above is (a+b) mod 97. Two other binary operations on the same digit
+vocabulary test whether grokking is about *addition* specifically or about the
+underlying **group** the network has to discover:
+
+- **(a−b) mod 97** is still the additive group Z/97 — negating the second
+  operand is just a relabelling of the answer, so the §8 Fourier-addition
+  circuit transfers unchanged. Same group, same predicted mechanism.
+- **(a×b) mod 97** is the interesting one. On the *nonzero* residues it is the
+  cyclic **multiplicative** group (Z/97)ˣ of order p−1 = 96, and the discrete
+  logarithm to a primitive root g (a = gⁱ, b = gʲ ⇒ a·b = g^((i+j) mod 96))
+  makes it *isomorphic to addition mod 96*. So multiplication should grok too —
+  it is addition in disguise — but in a 96-element group, with the 2p−1 = 193
+  pairs that involve a 0 (product 0) sitting outside the group as a trivial
+  constant the network can only memorize.
+
+Holding the main config fixed (frac 0.30, seed 0) and sweeping the operation at
+strong and weak weight decay:
+
+| operation | answer group | wd | grok step | final test |
+|---|---|---|---|---|
+| (a+b) mod 97 | Z/97 (order 97) | 1.0 | 1900 | 1.000 |
+| (a−b) mod 97 | Z/97 (order 97) | 1.0 | 3700 | 1.000 |
+| (a×b) mod 97 | (Z/97)ˣ (order 96) | 1.0 | **1000** | 1.000 |
+| (a+b) mod 97 | Z/97 (order 97) | 0.1 | 13900 | 1.000 |
+| (a−b) mod 97 | Z/97 (order 97) | 0.1 | **never** | 0.148 |
+| (a×b) mod 97 | (Z/97)ˣ (order 96) | 0.1 | 8400 | 1.000 |
+
+![operations](figures/operations.png)
+
+- **All three grok at strong weight decay** — the delayed-generalization
+  phenomenon is not specific to addition; it appears for any of these group
+  operations, and each still memorizes at step 100 first.
+- **Multiplication groks, and fastest.** Despite the "harder"-looking task, mul
+  is the quickest to generalize at *both* weight decays (1000 and 8400 steps).
+  This is consistent with the discrete-log isomorphism above — it is addition in
+  a group of order 96, which (unlike the prime 97) is highly composite
+  (96 = 2⁵·3), giving many low-order Fourier components for the circuit to latch
+  onto. The 193 zero-pairs are learned early and trivially.
+- **The operation matters most when the regularizer is weak.** At wd 1.0 the three
+  grok within a 4× window (1000–3700). At wd 0.1 they spread out completely: mul
+  8400, addition 13900, and **subtraction does not grok inside the 25k-step
+  budget at all** (final test 0.148, still climbing — the circuit is forming but
+  the norm barely falls under the weak decay, §7). Same additive group as
+  addition, decisively slower here.
+- **Caveat — single seed.** Like the head-count ablation (§9), this is seed 0
+  only, so the *ordering* (mul < add < sub) is a directional read, not an
+  error-barred one — subtraction being slower than addition despite the identical
+  group is exactly the kind of gap a single seed can manufacture. Day-22 work
+  adds two more seeds to this table.
+
+Only the four sub/mul runs are computed; the addition rows reuse the committed
+main-run CSVs ([`operations.py`](experiments/operations.py)).
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -359,7 +414,7 @@ retraining):
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                              # 39 tests
+pytest                              # 48 tests
 python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
@@ -367,6 +422,7 @@ python experiments/dropout_control.py  # §6 regularizer control (~4 min: one ru
 python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs; reuses the main baseline)
 python experiments/logit_attribution.py  # §8 per-frequency logit attribution (needs the checkpoints)
 python experiments/progress_measures.py  # §10 trajectory of progress measures (reruns the main config, ~6 min CPU)
+python experiments/operations.py         # §11 subtraction/multiplication vs addition (4 runs; reuses the main CSVs)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 
@@ -393,8 +449,9 @@ checkpoints (`runs/*.pt`) are gitignored.
 
 - wd × frac interaction surface (a coarse 2D grid); seed-averaged versions of
   the mechanistic read-outs.
-- Other operations: subtraction and multiplication grok; division's
-  structure differs — a natural comparative study.
+- Multi-seed error bars on the operations table (§11) to firm up the
+  mul < add < sub ordering; division (the multiplicative-group inverse, and
+  undefined at b=0) as the next comparative operation.
 
 ## References
 
