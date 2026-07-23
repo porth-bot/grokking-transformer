@@ -38,7 +38,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .data import modular_addition_dataset, train_test_split
+from .data import modular_dataset, train_test_split
 from .model import ModelConfig, Transformer
 
 
@@ -47,6 +47,7 @@ class TrainConfig:
     p: int = 97
     train_frac: float = 0.4
     weight_decay: float = 1.0
+    operation: str = "add"     # {"add", "sub", "mul"} -- the binary op mod p
     wd_scope: str = "all"      # {"all", "embeddings", "non_embeddings"}
     lr: float = 1e-3
     betas: tuple[float, float] = (0.9, 0.98)
@@ -69,6 +70,11 @@ class TrainConfig:
 
     def run_name(self) -> str:
         base = f"p{self.p}_frac{self.train_frac:.2f}_wd{self.weight_decay:g}_seed{self.seed}"
+        # the operation tags the name only when it is not the default addition,
+        # so every existing add-run artifact (and the checkpoints the mechanistic
+        # experiments depend on) keeps its name; sub/mul get an _op suffix.
+        if self.operation != "add":
+            base += f"_op{self.operation}"
         # lr joins the run identity only when it differs from the 1e-3 default,
         # so existing default-lr run artifacts keep their names.
         if abs(self.lr - 1e-3) > 1e-12:
@@ -163,7 +169,7 @@ def train(
     torch.manual_seed(cfg.seed)
     device = torch.device(cfg.device)
 
-    tokens, targets = modular_addition_dataset(cfg.p)
+    tokens, targets = modular_dataset(cfg.p, cfg.operation)
     (tr_x, tr_y), (te_x, te_y) = train_test_split(tokens, targets, cfg.train_frac, cfg.seed)
     tr_x, tr_y = tr_x.to(device), tr_y.to(device)
     te_x, te_y = te_x.to(device), te_y.to(device)

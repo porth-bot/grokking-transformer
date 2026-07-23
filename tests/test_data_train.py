@@ -3,7 +3,12 @@
 import pytest
 import torch
 
-from grokking.data import modular_addition_dataset, train_test_split
+from grokking.data import (
+    OPERATIONS,
+    modular_addition_dataset,
+    modular_dataset,
+    train_test_split,
+)
 from grokking.model import ModelConfig, Transformer
 from grokking.train import (
     EMBEDDING_PARAMS,
@@ -23,6 +28,74 @@ def test_dataset_is_exhaustive_and_correct():
     # labels actually implement modular addition; '=' token is id p
     assert torch.all(tokens[:, 2] == p)
     assert torch.all(targets == (tokens[:, 0] + tokens[:, 1]) % p)
+
+
+# --- multi-operation datasets (sub / mul, the Day-20 comparison) -----------
+
+
+@pytest.mark.parametrize("operation", sorted(OPERATIONS))
+def test_every_operation_is_exhaustive_and_labels_are_correct(operation):
+    p = 11
+    tokens, targets = modular_dataset(p, operation)
+    assert tokens.shape == (p * p, 3)
+    # every ordered pair exactly once, '=' token is id p, all labels in range
+    assert len({(int(a), int(b)) for a, b, _ in tokens}) == p * p
+    assert torch.all(tokens[:, 2] == p)
+    assert torch.all((0 <= targets) & (targets < p))
+    a, b = tokens[:, 0], tokens[:, 1]
+    expected = {"add": (a + b), "sub": (a - b), "mul": (a * b)}[operation] % p
+    assert torch.all(targets == expected)
+
+
+def test_subtraction_labels_include_the_wrapped_negatives():
+    # a - b is negative for a < b; the modulo must map it into 0..p-1, not
+    # leave a raw negative (torch's % already does this -- pin it).
+    _, targets = modular_dataset(7, "sub")
+    assert torch.all((0 <= targets) & (targets < 7))
+    assert int(modular_dataset(7, "sub")[1][7 * 2 + 5]) == (2 - 5) % 7  # == 4
+
+
+def test_multiplication_by_zero_row_and_column_is_all_zero():
+    # the 2p-1 pairs with a=0 or b=0 collapse to 0 -- the trivial residue
+    # outside the multiplicative group (documented in the module + README).
+    p = 13
+    tokens, targets = modular_dataset(p, "mul")
+    zero_mask = (tokens[:, 0] == 0) | (tokens[:, 1] == 0)
+    assert int(zero_mask.sum()) == 2 * p - 1
+    assert torch.all(targets[zero_mask] == 0)
+
+
+def test_addition_wrapper_matches_the_general_dataset():
+    for p in (5, 13):
+        wa, wb = modular_addition_dataset(p)
+        ga, gb = modular_dataset(p, "add")
+        assert torch.equal(wa, ga) and torch.equal(wb, gb)
+
+
+def test_unknown_operation_is_rejected():
+    with pytest.raises(ValueError):
+        modular_dataset(11, "div")
+
+
+def test_operation_only_tags_run_name_when_not_addition():
+    add = TrainConfig(p=97, train_frac=0.30, weight_decay=1.0, seed=0)
+    assert add.run_name() == "p97_frac0.30_wd1_seed0"
+    mul = TrainConfig(p=97, train_frac=0.30, weight_decay=1.0, seed=0,
+                      operation="mul")
+    assert mul.run_name() == "p97_frac0.30_wd1_seed0_opmul"
+
+
+def test_multiplication_memorizes_a_small_problem_end_to_end():
+    # sanity that the non-addition path trains: mul on a small modulus must
+    # still reach 100% train accuracy in a few hundred full-batch steps.
+    cfg = TrainConfig(
+        p=13, train_frac=0.6, weight_decay=0.0, operation="mul",
+        max_steps=600, eval_every=50, seed=0, device="cpu",
+        model=ModelConfig(d_model=64, n_heads=4, d_mlp=128),
+    )
+    _, summary = train(cfg, out_dir="runs_test", verbose=False)
+    assert summary["final_train_acc"] == 1.0
+    assert summary["config"]["operation"] == "mul"
 
 
 def test_split_is_disjoint_and_exhaustive():
