@@ -488,8 +488,8 @@ scratch in gp-from-scratch §6–7.
 
 ## Provenance
 
-Built as a study resource: implemented from scratch with AI assistance
-(Claude), with the theory written out in [`theory/notes.md`](theory/notes.md)
+Built as a study resource, with the theory written out in
+[`theory/notes.md`](theory/notes.md)
 and every structural claim about the implementation pinned by a test.
 MIT license.
 
