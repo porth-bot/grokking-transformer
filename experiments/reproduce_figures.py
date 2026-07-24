@@ -6,10 +6,20 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
 
     CSV logs      -> grokking_main, grokking_loss, wd_sweep, frac_sweep   (plots.py)
     CSV logs      -> lr_sweep                                        (lr_sweep.py)
+    CSV logs      -> dropout_control                          (dropout_control.py)
+    CSV logs      -> wd_scope                                        (wd_scope.py)
+    CSV logs      -> head_count                                    (head_count.py)
+    CSV logs      -> progress_measures                      (progress_measures.py)
+    CSV logs      -> operations                                    (operations.py)
     checkpoints   -> fourier_spectrum                                     (fourier.py)
     checkpoints   -> embedding_circle                            (embedding_circle.py)
     checkpoints   -> attention_pattern                         (attention_pattern.py)
     checkpoints   -> logit_attribution                       (logit_attribution.py)
+
+That list is ``FIGURES`` below, and a test asserts it matches the contents of
+``figures/`` exactly -- so a figure added without a replay path here fails the
+suite instead of silently becoming unreproducible (which is how wd_scope.png
+went missing for eleven days).
 
 It first checks that the artifacts each figure depends on are present, so a
 missing or renamed file fails loudly here rather than with a cryptic error deep
@@ -30,11 +40,33 @@ import operations
 import plots
 import progress_measures
 import run_sweep
+import wd_scope
 
 from grokking.train import TrainConfig
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS = ROOT / "runs"
+FIGS = ROOT / "figures"
+
+# Every figure this script regenerates, i.e. every figure the repo ships.
+# tests/test_reproduce_figures.py asserts this equals the actual contents of
+# figures/, in both directions.
+FIGURES = (
+    "grokking_main.png",       # plots.main_grokking_figure
+    "grokking_loss.png",       # plots.loss_figure
+    "wd_sweep.png",            # plots.wd_sweep_figure
+    "frac_sweep.png",          # plots.frac_sweep_figure
+    "lr_sweep.png",            # lr_sweep.figure_and_table
+    "dropout_control.png",     # dropout_control.figure_and_table
+    "wd_scope.png",            # wd_scope.figure_and_table
+    "head_count.png",          # head_count.figure_and_table
+    "progress_measures.png",   # progress_measures.figure
+    "operations.png",          # operations.figure_and_table
+    "fourier_spectrum.png",    # fourier.main
+    "embedding_circle.png",    # embedding_circle.main
+    "attention_pattern.png",   # attention_pattern.main
+    "logit_attribution.png",   # logit_attribution.main
+)
 
 # Runs whose CSV/JSON the plot functions read, and whose checkpoints the
 # Fourier analysis reads. The wd/frac error-bar figures consume every seed of
@@ -47,6 +79,10 @@ CSV_RUNS = [
     "p97_frac0.30_wd0_seed0_do0.1",
     "p97_frac0.30_wd1_seed0_h1",   # head-count ablation (§9); 4-head reuses main
     "p97_frac0.30_wd1_seed0_h2",
+] + [
+    # weight-decay scope ablation (§7): embeddings-only and non-embeddings-only;
+    # the all-parameters arm is the main run already listed above.
+    wd_scope.cfg_for(scope).run_name() for scope in wd_scope.SCOPES
 ] + [
     # operations comparison (§11): sub/mul at wd {1.0, 0.1}; add reuses the
     # main-run and wd0.1 CSVs already listed above.
@@ -101,6 +137,8 @@ def main():
     head_count.figure_and_table({1: "p97_frac0.30_wd1_seed0_h1",
                                  2: "p97_frac0.30_wd1_seed0_h2",
                                  4: "p97_frac0.30_wd1_seed0"})
+    wd_scope.figure_and_table(*(wd_scope.cfg_for(s).run_name()
+                                for s in wd_scope.SCOPES))  # §7
     progress_measures.figure()  # §10, from the committed progress trajectory CSV
     operations.figure_and_table()  # §11, sub/mul vs add from committed CSVs
 

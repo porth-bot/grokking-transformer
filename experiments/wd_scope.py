@@ -54,11 +54,21 @@ plt.rcParams.update(
 )
 
 
-def run_scope(scope):
-    cfg = TrainConfig(
+SCOPES = ("embeddings", "non_embeddings")
+
+
+def cfg_for(scope):
+    """The config for one scope arm -- the single source of truth for its
+    run_name, shared with reproduce_figures.py so the artifact check and the
+    training call cannot drift apart."""
+    return TrainConfig(
         p=97, train_frac=0.30, weight_decay=1.0, wd_scope=scope, lr=1e-3,
         max_steps=MAX_STEPS, eval_every=100, seed=0,
     )
+
+
+def run_scope(scope):
+    cfg = cfg_for(scope)
     if not RUNS.joinpath(cfg.run_name() + ".json").exists():
         print(f"=== {cfg.run_name()} on {cfg.device} ===", flush=True)
         train(cfg, out_dir=str(RUNS))
@@ -119,6 +129,5 @@ def figure_and_table(emb_name, non_name):
 
 
 if __name__ == "__main__":
-    emb = run_scope("embeddings")
-    non = run_scope("non_embeddings")
+    emb, non = (run_scope(scope) for scope in SCOPES)
     figure_and_table(emb, non)

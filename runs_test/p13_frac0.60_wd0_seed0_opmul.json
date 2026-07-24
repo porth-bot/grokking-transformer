@@ -1,9 +1,9 @@
 {
   "config": {
     "p": 13,
-    "train_frac": 0.5,
+    "train_frac": 0.6,
     "weight_decay": 0.0,
-    "operation": "add",
+    "operation": "mul",
     "wd_scope": "all",
     "lr": 0.001,
     "betas": [
@@ -29,8 +29,8 @@
   "memorize_step": 100,
   "grok_step": null,
   "final_train_acc": 1.0,
-  "final_test_acc": 0.21176470816135406,
+  "final_test_acc": 0.6029411554336548,
   "steps_run": 600,
-  "wall_seconds": 2.5,
+  "wall_seconds": 3.4,
   "n_params": 35264
 }
