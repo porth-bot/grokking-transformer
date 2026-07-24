@@ -411,10 +411,26 @@ retraining):
 
 ## Reproduce
 
+Every figure, from a clean clone, without training anything:
+
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-pytest                              # 48 tests
+./reproduce.sh                      # tests, mypy, all 14 figures: ~25 s
+```
+
+`requirements.txt` pins the exact versions the committed runs were produced
+with (Python 3.12.13, torch 2.12.1); `pyproject.toml` keeps lower bounds
+instead, which is what CI installs. The replay is pure post-processing of
+committed files, so it is exact: every PNG comes back byte-for-byte. Training
+itself is seeded and replays on the same torch build, but torch guarantees no
+bitwise determinism across versions or hardware — which is exactly why the runs
+are committed rather than regenerated on demand.
+
+To retrain instead (hours, not seconds):
+
+```bash
+pytest                              # 51 tests
 python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
@@ -426,8 +442,13 @@ python experiments/operations.py         # §11 subtraction/multiplication vs ad
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 
-Committed CSV logs mean the figures are reproducible without retraining;
-checkpoints (`runs/*.pt`) are gitignored.
+Committed CSV logs mean the figures are reproducible without retraining. Model
+checkpoints are gitignored *except* the two from the main run
+(`p97_frac0.30_wd1_seed0{,_memorize}.pt`, ~0.9 MB each), which the mechanistic
+figures — Fourier spectrum, embedding ring, attention pattern, logit
+attribution — are drawn from, so those reproduce from a clone too.
+`tests/test_reproduce_figures.py` asserts that every figure in `figures/` has a
+replay path and that every artifact the replay reads is committed.
 
 ## Honest limitations
 
