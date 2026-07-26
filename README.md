@@ -346,43 +346,56 @@ underlying **group** the network has to discover:
   pairs that involve a 0 (product 0) sitting outside the group as a trivial
   constant the network can only memorize.
 
-Holding the main config fixed (frac 0.30, seed 0) and sweeping the operation at
-strong and weak weight decay:
+Holding the main config fixed (frac 0.30) and sweeping the operation at strong
+and weak weight decay, **three seeds per cell**:
 
-| operation | answer group | wd | grok step | final test |
+| operation | answer group | wd | grok step, median [min–max] | final test |
 |---|---|---|---|---|
-| (a+b) mod 97 | Z/97 (order 97) | 1.0 | 1900 | 1.000 |
-| (a−b) mod 97 | Z/97 (order 97) | 1.0 | 3700 | 1.000 |
-| (a×b) mod 97 | (Z/97)ˣ (order 96) | 1.0 | **1000** | 1.000 |
-| (a+b) mod 97 | Z/97 (order 97) | 0.1 | 13900 | 1.000 |
-| (a−b) mod 97 | Z/97 (order 97) | 0.1 | **never** | 0.148 |
-| (a×b) mod 97 | (Z/97)ˣ (order 96) | 0.1 | 8400 | 1.000 |
+| (a+b) mod 97 | Z/97 (order 97) | 1.0 | 1,300 [1,200–1,900] | 1.000 |
+| (a−b) mod 97 | Z/97 (order 97) | 1.0 | 3,700 [2,500–3,900] | 1.000 |
+| (a×b) mod 97 | (Z/97)ˣ (order 96) | 1.0 | 1,100 [1,000–1,500] | 1.000 |
+| (a+b) mod 97 | Z/97 (order 97) | 0.1 | 10,800 [9,200–13,900] | 1.000 |
+| (a−b) mod 97 | Z/97 (order 97) | 0.1 | **24,800 (1 of 3 seeds)** | 0.148 / 0.047 / 0.962 |
+| (a×b) mod 97 | (Z/97)ˣ (order 96) | 0.1 | 8,400 [7,900–11,900] | 1.000 |
 
 ![operations](figures/operations.png)
 
-- **All three grok at strong weight decay** — the delayed-generalization
-  phenomenon is not specific to addition; it appears for any of these group
+- **All three grok at strong weight decay, in every seed** — delayed
+  generalization is not specific to addition; it appears for any of these group
   operations, and each still memorizes at step 100 first.
-- **Multiplication groks, and fastest.** Despite the "harder"-looking task, mul
-  is the quickest to generalize at *both* weight decays (1000 and 8400 steps).
-  This is consistent with the discrete-log isomorphism above — it is addition in
-  a group of order 96, which (unlike the prime 97) is highly composite
-  (96 = 2⁵·3), giving many low-order Fourier components for the circuit to latch
-  onto. The 193 zero-pairs are learned early and trivially.
-- **The operation matters most when the regularizer is weak.** At wd 1.0 the three
-  grok within a 4× window (1000–3700). At wd 0.1 they spread out completely: mul
-  8400, addition 13900, and **subtraction does not grok inside the 25k-step
-  budget at all** (final test 0.148, still climbing — the circuit is forming but
-  the norm barely falls under the weak decay, §7). Same additive group as
-  addition, decisively slower here.
-- **Caveat — single seed.** Like the head-count ablation (§9), this is seed 0
-  only, so the *ordering* (mul < add < sub) is a directional read, not an
-  error-barred one — subtraction being slower than addition despite the identical
-  group is exactly the kind of gap a single seed can manufacture. Day-22 work
-  adds two more seeds to this table.
+- **Subtraction is decisively the slowest, and the seeds agree.** At wd 1.0 its
+  range [2,500–3,900] does not overlap addition's [1,200–1,900] or
+  multiplication's [1,000–1,500] at all, so this is a real gap and not seed
+  noise. At wd 0.1 it becomes a *qualitative* difference: two of three seeds
+  never grok inside the 25k-step budget (final test 0.148 and 0.047) and the
+  third only makes it at step 24,800, right at the edge.
+- **Multiplication is not measurably faster than addition** — and this
+  **corrects the earlier single-seed reading**. Seed 0 alone showed mul 1,000 vs
+  add 1,900 and invited the story that the highly composite group order 96 =
+  2⁵·3 gives the circuit more low-order frequencies to latch onto. With three
+  seeds the medians are 1,100 vs 1,300 and the ranges overlap almost entirely,
+  so the honest statement is that mul ≈ add. (At wd 0.1 mul is lower in every
+  order statistic — 8,400 [7,900–11,900] vs 10,800 [9,200–13,900] — but the
+  ranges still overlap, so at most a weak effect.) The isomorphism argument
+  survives as an explanation of *why multiplication groks at all*; it does not
+  survive as an explanation of it grokking sooner.
+- **So the group is not what separates these tasks.** Subtraction has the
+  *identical* group to addition and is reliably the hardest of the three, so
+  group order and structure cannot be the operative variable. The one structural
+  property that distinguishes it: **a−b is the only non-commutative operation
+  here**, and the appendix's attention read-out shows grokking *symmetrizes* how
+  the "=" position reads the two operands (per-head |A[=→a] − A[=→b]| falls
+  0.19 → 0.00). A commutative target lets that symmetric circuit serve; a
+  non-commutative one forbids it. That is a hypothesis this experiment motivates
+  but does not test — the check would be re-running the attention symmetry
+  measurement on the subtraction checkpoints, which is not done here.
+- **Three seeds is not a distribution**, the same caveat as the wd/frac bands in
+  §3. The claims above are stated at the resolution the ranges support:
+  disjoint ranges (sub vs the rest) treated as real, overlapping ones (mul vs
+  add) treated as unresolved.
 
-Only the four sub/mul runs are computed; the addition rows reuse the committed
-main-run CSVs ([`operations.py`](experiments/operations.py)).
+Only the sub/mul runs are computed; the addition rows reuse the committed
+multi-seed sweep CSVs ([`operations.py`](experiments/operations.py)).
 
 ### Appendix: attention and embedding geometry
 
@@ -438,7 +451,7 @@ python experiments/dropout_control.py  # §6 regularizer control (~4 min: one ru
 python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs; reuses the main baseline)
 python experiments/logit_attribution.py  # §8 per-frequency logit attribution (needs the checkpoints)
 python experiments/progress_measures.py  # §10 trajectory of progress measures (reruns the main config, ~6 min CPU)
-python experiments/operations.py         # §11 subtraction/multiplication vs addition (4 runs; reuses the main CSVs)
+python experiments/operations.py         # §11 subtraction/multiplication vs addition (12 runs over 3 seeds; addition reuses the sweep CSVs)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
 
@@ -470,9 +483,11 @@ replay path and that every artifact the replay reads is committed.
 
 - wd × frac interaction surface (a coarse 2D grid); seed-averaged versions of
   the mechanistic read-outs.
-- Multi-seed error bars on the operations table (§11) to firm up the
-  mul < add < sub ordering; division (the multiplicative-group inverse, and
-  undefined at b=0) as the next comparative operation.
+- Test §11's commutativity hypothesis directly: re-run the appendix's
+  attention-symmetry measurement on the subtraction checkpoints, where the
+  symmetric read the addition model converges to is not available. Division
+  (the multiplicative-group inverse, undefined at b=0) as the next comparative
+  operation.
 
 ## References
 
