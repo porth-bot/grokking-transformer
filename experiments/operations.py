@@ -2,8 +2,9 @@
 
 The canonical task is (a+b) mod p. This experiment asks whether the *same*
 delayed generalization appears for two other binary operations on the same
-digit vocabulary, holding everything else fixed (frac 0.30, seed 0, one layer,
-4 heads, lr 1e-3), at both a strong and a weak weight decay (wd in {1.0, 0.1}):
+digit vocabulary, holding everything else fixed (frac 0.30, one layer, 4 heads,
+lr 1e-3), at both a strong and a weak weight decay (wd in {1.0, 0.1}), over
+three seeds:
 
 - **(a - b) mod p** is still the additive group of Z/pZ; negating the second
   operand is a relabelling of the answer, so the Fourier-addition circuit
@@ -17,17 +18,21 @@ digit vocabulary, holding everything else fixed (frac 0.30, seed 0, one layer,
   pairs that involve a 0 (product 0) sit outside that group and can only be
   memorized. Prediction: groks; the writeup states the isomorphism explicitly.
 
-The addition rows reuse the committed main-run CSVs (p97_frac0.30_wd1_seed0 and
-p97_frac0.30_wd0.1_seed0); only the four sub/mul runs are computed here, tagged
-``_opsub`` / ``_opmul`` in the run name so no existing artifact is touched.
-Resumable: existing summaries are skipped. Single seed (0) -- like the head-count
-ablation, this is a directional comparison, not an error-bar study; Day 22 adds
-two more seeds to the table.
+Seeds. Day 20 ran seed 0 only and flagged the comparison as directional. Day 22
+adds seeds 1 and 2, so every cell is a median over three runs with a min-max
+range, and "does the ordering survive seed noise?" gets a measured answer
+instead of a caveat. Three seeds is still not a distribution -- the same honest
+framing as the wd/frac error bars in section 3.
 
-Produces ``figures/operations.png`` (test accuracy over training, one panel per
-weight decay) from the committed CSVs.
+The addition rows reuse the committed sweep CSVs (p97_frac0.30_wd{1,0.1}_seedN,
+already present for seeds 0-4 from the multi-seed error-bar runs); only the
+sub/mul runs are computed here, tagged ``_opsub`` / ``_opmul`` in the run name
+so no existing artifact is touched. Resumable: existing summaries are skipped.
 
-Run:  python experiments/operations.py   (~10-20 min on MPS for the four runs)
+Produces ``figures/operations.png`` (median test accuracy with a min-max band,
+one panel per weight decay) from the committed CSVs.
+
+Run:  python experiments/operations.py   (~1 h on MPS for the eight new runs)
 """
 
 import csv
@@ -39,6 +44,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+from grokking.aggregate import align_and_aggregate, fmt_median_range  # noqa: E402
 from grokking.train import TrainConfig, train  # noqa: E402
 
 MAX_STEPS = 25_000   # same budget as the main run
@@ -48,6 +54,7 @@ FIGS = ROOT / "figures"
 
 OPERATIONS = ["add", "sub", "mul"]
 WEIGHT_DECAYS = [1.0, 0.1]
+SEEDS = [0, 1, 2]
 
 # Human-readable labels for the figure/table (the answer's group, and its order).
 GROUP = {
@@ -57,16 +64,16 @@ GROUP = {
 }
 
 
-def cfg_for(operation, wd):
+def cfg_for(operation, wd, seed=0):
     return TrainConfig(
         p=97, train_frac=0.30, weight_decay=wd, operation=operation, lr=1e-3,
-        max_steps=MAX_STEPS, eval_every=100, seed=0,
+        max_steps=MAX_STEPS, eval_every=100, seed=seed,
     )
 
 
-def run(operation, wd):
-    """Train (or reuse) one (operation, wd) cell; return its run name."""
-    cfg = cfg_for(operation, wd)
+def run(operation, wd, seed):
+    """Train (or reuse) one (operation, wd, seed) cell; return its run name."""
+    cfg = cfg_for(operation, wd, seed)
     if not RUNS.joinpath(cfg.run_name() + ".json").exists():
         print(f"=== {cfg.run_name()} on {cfg.device} ===", flush=True)
         train(cfg, out_dir=str(RUNS))
@@ -85,25 +92,43 @@ def _load(name):
 
 
 def figure_and_table():
-    """Comparison table + a two-panel test-accuracy figure, committed CSVs only."""
+    """Comparison table + a two-panel test-accuracy figure, committed CSVs only.
+
+    Each (operation, wd) cell is aggregated across ``SEEDS`` the same way the
+    wd/frac error bars are: forward-fill every seed onto the union step grid,
+    then plot the median with a band. The band is min-max here rather than the
+    IQR -- with three seeds the quartiles carry no more information than the
+    extremes, and the extremes are the honest thing to show.
+    """
     colors = {"add": "C0", "sub": "C2", "mul": "C3"}
     fig, axes = plt.subplots(1, 2, figsize=(9.2, 3.8), sharey=True,
                              constrained_layout=True)
     rows = []
     for ax, wd in zip(axes, WEIGHT_DECAYS):
         for op in OPERATIONS:
-            h, s = _load(cfg_for(op, wd).run_name())
-            steps = [max(st, 1) for st in h["step"]]
-            ax.plot(steps, h["test_acc"], lw=1.6, color=colors[op],
+            loaded = [_load(cfg_for(op, wd, s).run_name()) for s in SEEDS]
+            grid, med, lo, hi = align_and_aggregate(
+                [h["step"] for h, _ in loaded],
+                [h["test_acc"] for h, _ in loaded],
+                lo_pct=0.0, hi_pct=100.0,
+            )
+            steps = [max(int(st), 1) for st in grid]
+            ax.plot(steps, med, lw=1.6, color=colors[op],
                     label=GROUP[op].split("  ")[0])
-            rows.append((op, wd, s["memorize_step"], s["grok_step"],
-                         s["final_train_acc"], s["final_test_acc"]))
+            ax.fill_between(steps, lo, hi, color=colors[op], alpha=0.15, lw=0)
+            rows.append((
+                op, wd,
+                [s["memorize_step"] for _, s in loaded],
+                [s["grok_step"] for _, s in loaded],
+                [s["final_test_acc"] for _, s in loaded],
+            ))
         ax.set_xscale("log")
         ax.set_xlabel("step (log scale)")
         ax.set_title(f"weight decay {wd:g}", loc="left")
     axes[0].set_ylabel("test accuracy")
     axes[0].legend(loc="best", fontsize=8)
-    fig.suptitle("Grokking across modular operations (frac 0.30, seed 0)",
+    fig.suptitle(f"Grokking across modular operations "
+                 f"(frac 0.30, median of {len(SEEDS)} seeds, band = min–max)",
                  x=0.01, ha="left", fontsize=11)
     FIGS.mkdir(exist_ok=True)
     fig.savefig(FIGS / "operations.png", bbox_inches="tight")
@@ -113,16 +138,18 @@ def figure_and_table():
     # sort the printed table by (wd desc, op order) for a stable, readable block
     order = {op: i for i, op in enumerate(OPERATIONS)}
     rows.sort(key=lambda r: (-r[1], order[r[0]]))
-    print(f"\n{'operation':>26} {'wd':>4} {'memorize':>9} {'grok':>7} "
-          f"{'final train':>12} {'final test':>11}")
-    for op, wd, mem, grok, tr, te in rows:
-        grok_s = str(grok) if grok is not None else "never"
-        print(f"{GROUP[op]:>26} {wd:>4g} {str(mem):>9} {grok_s:>7} "
-              f"{tr:>12.3f} {te:>11.3f}")
+    print(f"\nmedian [min–max] over seeds {SEEDS}")
+    print(f"{'operation':>26} {'wd':>4} {'memorize':>16} {'grok':>24} "
+          f"{'final test':>16}")
+    for op, wd, mem, grok, test in rows:
+        acc = "  ".join(f"{v:.3f}" for v in test)
+        print(f"{GROUP[op]:>26} {wd:>4g} {fmt_median_range(mem):>16} "
+              f"{fmt_median_range(grok):>24} {acc:>16}")
 
 
 if __name__ == "__main__":
     for wd in WEIGHT_DECAYS:
-        for op in ("sub", "mul"):   # add reuses the committed main-run CSVs
-            run(op, wd)
+        for op in ("sub", "mul"):   # add reuses the committed sweep CSVs
+            for seed in SEEDS:
+                run(op, wd, seed)
     figure_and_table()

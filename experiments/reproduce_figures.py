@@ -84,10 +84,12 @@ CSV_RUNS = [
     # the all-parameters arm is the main run already listed above.
     wd_scope.cfg_for(scope).run_name() for scope in wd_scope.SCOPES
 ] + [
-    # operations comparison (§11): sub/mul at wd {1.0, 0.1}; add reuses the
-    # main-run and wd0.1 CSVs already listed above.
-    operations.cfg_for(op, wd).run_name()
-    for wd in operations.WEIGHT_DECAYS for op in ("sub", "mul")
+    # operations comparison (§11): sub/mul at wd {1.0, 0.1} over three seeds;
+    # add reuses the main-run and wd0.1 sweep CSVs already listed above.
+    operations.cfg_for(op, wd, seed).run_name()
+    for wd in operations.WEIGHT_DECAYS
+    for op in ("sub", "mul")
+    for seed in operations.SEEDS
 ]
 CKPT_RUNS = [(fourier.MAIN, ["", "_memorize"])]
 # The lr-sensitivity sweep logs live in runs_lr/ (CSV/JSON only).
