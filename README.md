@@ -27,7 +27,8 @@ prefers the general solution, and what schedule it finds it on.
 The theory ([`theory/notes.md`](theory/notes.md)) covers the attention
 derivation, the frequency-space algorithm for modular addition (via the DFT
 delta identity $\sum_{k=0}^{p-1} \cos(2\pi k n / p) = p\,\delta_{n \equiv 0}$
-and the angle-addition identities), and the norm/efficiency account of *why*
+and the angle-addition identities), five exercises with worked solutions and
+tests, and the norm/efficiency account of *why*
 generalization is delayed rather than absent.
 
 ## What's implemented
@@ -413,6 +414,21 @@ retraining):
   the general algorithm must respect, whereas the memorizing heads are
   lopsided (one puts 0.74 on `a`, 0.25 on `b`).
 
+  That statistic is averaged over the dataset, and Exercise 3 of
+  [`theory/notes.md`](theory/notes.md) works out what averaging makes it mean:
+  since the dataset is every *ordered* pair, the per-example difference is odd
+  under swapping the operands exactly when the computation is
+  swap-equivariant, so the dataset mean measures equivariance and not
+  per-input symmetry. The grokked model is in fact still strongly asymmetric
+  on individual inputs (per-example $\mathbb{E}|A_{=\to a} - A_{=\to b}| =
+  0.15$, eight times its value at initialization) — it has learned the
+  *symmetry*, not a uniform read. Measured directly, the equivariance defect
+  $\mathbb{E}|A_{(a,b) \to a} - A_{(b,a) \to b}|$ is 0.189 at memorization and
+  0.00017 after grokking, and it reaches the output: swapping the operands
+  moves the memorizing model's logits by 0.61 of their own standard deviation,
+  against 0.004 for the grokked one. The memorizing model computes a
+  materially non-commutative function; the grokked one does not.
+
   ![attention](figures/attention_pattern.png)
 
 - **Embedding ring** ([`embedding_circle.py`](experiments/embedding_circle.py)).
@@ -443,7 +459,7 @@ are committed rather than regenerated on demand.
 To retrain instead (hours, not seconds):
 
 ```bash
-pytest                              # 51 tests
+pytest                              # 64 tests
 python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
 python experiments/plots.py         # figures from committed CSVs (no training needed)
 python experiments/fourier.py       # needs the checkpoints from run_sweep.py
