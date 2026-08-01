@@ -150,7 +150,7 @@ def weight_decay_groups(
 
 def train(
     cfg: TrainConfig,
-    out_dir: str = "runs",
+    out_dir: str | Path = "runs",
     verbose: bool = True,
     on_eval: Callable[[int, Transformer], None] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:

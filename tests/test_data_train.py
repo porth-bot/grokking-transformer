@@ -1,4 +1,14 @@
-"""Dataset correctness and end-to-end trainability."""
+"""Dataset correctness and end-to-end trainability.
+
+The end-to-end tests train into ``tmp_path``. They used to train into a
+committed ``runs_test/`` directory, which was a slow-motion trap: those
+artifacts are pure by-products -- no test reads them back, no figure is built
+from them -- but they were tracked, so every ``pytest`` run rewrote four files
+and left the working tree dirty. The values drift with the torch version, so
+"revert the churn" became a standing habit, which is exactly the habit that
+hides a real diff on the day one appears. Test output goes somewhere
+disposable instead.
+"""
 
 import pytest
 import torch
@@ -85,7 +95,7 @@ def test_operation_only_tags_run_name_when_not_addition():
     assert mul.run_name() == "p97_frac0.30_wd1_seed0_opmul"
 
 
-def test_multiplication_memorizes_a_small_problem_end_to_end():
+def test_multiplication_memorizes_a_small_problem_end_to_end(tmp_path):
     # sanity that the non-addition path trains: mul on a small modulus must
     # still reach 100% train accuracy in a few hundred full-batch steps.
     cfg = TrainConfig(
@@ -93,7 +103,7 @@ def test_multiplication_memorizes_a_small_problem_end_to_end():
         max_steps=600, eval_every=50, seed=0, device="cpu",
         model=ModelConfig(d_model=64, n_heads=4, d_mlp=128),
     )
-    _, summary = train(cfg, out_dir="runs_test", verbose=False)
+    _, summary = train(cfg, out_dir=tmp_path, verbose=False)
     assert summary["final_train_acc"] == 1.0
     assert summary["config"]["operation"] == "mul"
 
@@ -110,7 +120,33 @@ def test_split_is_disjoint_and_exhaustive():
     assert torch.equal(tr_x, tr_x2)
 
 
-def test_training_loop_memorizes_small_problem():
+def test_train_writes_its_artifacts_only_under_the_out_dir_it_was_given(tmp_path):
+    """The contract the tmp_path redirection above rests on.
+
+    ``train`` is documented to write ``<out_dir>/<run_name>{.csv,.json,.pt}``
+    and ``_memorize.pt``. If any of those ever acquired a hard-coded path, the
+    suite would quietly start writing into the repo again and nothing else
+    here would notice.
+    """
+    cfg = TrainConfig(
+        p=13, train_frac=0.5, weight_decay=0.0, max_steps=100, eval_every=50,
+        seed=0, device="cpu", model=ModelConfig(d_model=32, n_heads=4, d_mlp=64),
+    )
+    _, summary = train(cfg, out_dir=tmp_path, verbose=False)
+    name = cfg.run_name()
+    expected = {f"{name}.csv", f"{name}.json", f"{name}.pt"}
+    # The memorization checkpoint exists exactly when there was a memorization
+    # step to save: 100 steps at p=13 is deliberately too few for one.
+    if summary["memorize_step"] is not None:
+        expected.add(f"{name}_memorize.pt")
+    assert {f.name for f in tmp_path.iterdir()} == expected
+    # A Path and the equivalent str are the same request.
+    other = tmp_path / "as_str"
+    train(cfg, out_dir=str(other), verbose=False)
+    assert (other / f"{name}.csv").exists()
+
+
+def test_training_loop_memorizes_small_problem(tmp_path):
     """End-to-end sanity on CPU: with no weight decay and plenty of capacity,
     a few hundred full-batch steps must drive train accuracy to 100% on a
     small modulus (this is the memorization phase grokking starts from)."""
@@ -124,7 +160,7 @@ def test_training_loop_memorizes_small_problem():
         device="cpu",
         model=ModelConfig(d_model=64, n_heads=4, d_mlp=128),
     )
-    history, summary = train(cfg, out_dir="runs_test", verbose=False)
+    history, summary = train(cfg, out_dir=tmp_path, verbose=False)
     assert summary["final_train_acc"] == 1.0
     assert summary["memorize_step"] is not None
 
@@ -184,7 +220,7 @@ def test_wd_scope_only_tags_run_name_when_restricted():
     assert scoped.run_name() == "p97_frac0.30_wd1_seed0_wdsembeddings"
 
 
-def test_scoped_weight_decay_still_trains():
+def test_scoped_weight_decay_still_trains(tmp_path):
     # A scoped optimizer must still be a valid AdamW that memorizes a small
     # problem (both groups receive gradients and step).
     cfg = TrainConfig(
@@ -192,5 +228,5 @@ def test_scoped_weight_decay_still_trains():
         max_steps=600, eval_every=50, seed=0, device="cpu",
         model=ModelConfig(d_model=64, n_heads=4, d_mlp=128),
     )
-    _, summary = train(cfg, out_dir="runs_test", verbose=False)
+    _, summary = train(cfg, out_dir=tmp_path, verbose=False)
     assert summary["final_train_acc"] == 1.0
