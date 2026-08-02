@@ -456,20 +456,30 @@ itself is seeded and replays on the same torch build, but torch guarantees no
 bitwise determinism across versions or hardware — which is exactly why the runs
 are committed rather than regenerated on demand.
 
-To retrain instead (hours, not seconds):
+To retrain instead (hours, not seconds). Every experiment script is listed, and
+the training costs are the wall-clock the committed run logs actually recorded
+(`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 64 tests
-python experiments/run_sweep.py     # 26 runs (5 seeds x 5 cells + 1), ~2 h on Apple Silicon (MPS) — resumable
-python experiments/plots.py         # figures from committed CSVs (no training needed)
-python experiments/fourier.py       # needs the checkpoints from run_sweep.py
-python experiments/dropout_control.py  # §6 regularizer control (~4 min: one run)
-python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs; reuses the main baseline)
-python experiments/logit_attribution.py  # §8 per-frequency logit attribution (needs the checkpoints)
+pytest                              # 79 tests
+python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
+python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
+python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)
+python experiments/fourier.py          # §5 Fourier spectrum (checkpoints only, no training)
+python experiments/dropout_control.py  # §6 regularizer control (1 run, 3.7 min)
+python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs, 7.2 min; reuses the main baseline)
+python experiments/logit_attribution.py  # §8 per-frequency logit attribution (checkpoints only)
+python experiments/head_count.py         # §9 1 vs 2 vs 4 heads (2 runs, 1 min; 4 heads is the main run)
 python experiments/progress_measures.py  # §10 trajectory of progress measures (reruns the main config, ~6 min CPU)
-python experiments/operations.py         # §11 subtraction/multiplication vs addition (12 runs over 3 seeds; addition reuses the sweep CSVs)
+python experiments/operations.py         # §11 subtraction/multiplication vs addition (12 runs, 55 min; addition reuses the sweep CSVs)
+python experiments/embedding_circle.py   # appendix: embedding ring (checkpoints only)
+python experiments/attention_pattern.py  # appendix: attention symmetry (checkpoints only)
+python experiments/plots.py              # §1-2 figures from committed CSVs (no training needed)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```
+
+The four checkpoint-only scripts and `plots.py` need no GPU and no training at
+all — they are the replay path, and `reproduce_figures.py` runs all of them.
 
 Committed CSV logs mean the figures are reproducible without retraining. Model
 checkpoints are gitignored *except* the two from the main run
@@ -523,9 +533,10 @@ buried.
 | Repo | Built from scratch |
 | --- | --- |
 | **grokking-transformer** *(this repo)* | A transformer that groks modular arithmetic, and the Fourier circuit it learns |
-| [mcmc-from-scratch](https://github.com/porth-bot/mcmc-from-scratch) | Metropolis-Hastings, Gibbs, HMC, MALA, parallel tempering — validated against exact posteriors |
+| [mcmc-from-scratch](https://github.com/porth-bot/mcmc-from-scratch) | Metropolis-Hastings, Gibbs, HMC, MALA, NUTS, parallel tempering — validated against exact posteriors |
 | [gp-from-scratch](https://github.com/porth-bot/gp-from-scratch) | GP regression, kernels with hand-derived gradients, ML-II, and the NTK/NNGP wide-network correspondence |
 | [pinn-from-scratch](https://github.com/porth-bot/pinn-from-scratch) | Physics-informed networks: exact autograd PDE residuals against closed-form solutions |
+| [diffusion-from-scratch](https://github.com/porth-bot/diffusion-from-scratch) | Score matching, reverse-time samplers, and the probability-flow ODE — against exact scores at every noise level |
 
 The nearest neighbour is pinn-from-scratch, and for a reason that goes past
 both being PyTorch: both read a trained network in the frequency domain, and

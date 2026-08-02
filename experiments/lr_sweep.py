@@ -10,7 +10,8 @@ Runs go to ``runs_lr/`` (resumable; the .pt checkpoints are not committed --
 this experiment needs only the CSV trajectories -- see .gitignore). Produces
 ``figures/lr_sweep.png`` and prints a summary table.
 
-Run:  python experiments/lr_sweep.py    (~20 min on MPS: three full runs)
+Run:  python experiments/lr_sweep.py    (three full runs; the committed
+      logs recorded 4.5 min total on MPS)
 """
 
 import csv

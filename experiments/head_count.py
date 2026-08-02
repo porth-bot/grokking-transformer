@@ -16,7 +16,8 @@ name). Resumable: existing summaries are not recomputed. Produces
 ``figures/head_count.png`` (test accuracy over training for the three counts)
 from the committed CSVs.
 
-Run:  python experiments/head_count.py   (~5-15 min on MPS for the two new runs)
+Run:  python experiments/head_count.py   (two new runs; the committed logs
+      recorded 1 min total on MPS -- both grok early and stop)
 """
 
 import csv

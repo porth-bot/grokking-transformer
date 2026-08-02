@@ -32,7 +32,9 @@ so no existing artifact is touched. Resumable: existing summaries are skipped.
 Produces ``figures/operations.png`` (median test accuracy with a min-max band,
 one panel per weight decay) from the committed CSVs.
 
-Run:  python experiments/operations.py   (~1 h on MPS for the eight new runs)
+Run:  python experiments/operations.py   (twelve new runs -- two operations x
+      two weight decays x three seeds; the committed logs recorded 55 min
+      total on MPS)
 """
 
 import csv
