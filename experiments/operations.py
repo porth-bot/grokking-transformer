@@ -44,8 +44,12 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
+from _style import apply_style  # noqa: E402
+
 from grokking.aggregate import align_and_aggregate, fmt_median_range  # noqa: E402
 from grokking.train import TrainConfig, train  # noqa: E402
+
+apply_style()
 
 MAX_STEPS = 25_000   # same budget as the main run
 ROOT = Path(__file__).resolve().parent.parent

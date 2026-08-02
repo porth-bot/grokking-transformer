@@ -135,19 +135,11 @@ def main():
 
 
 def _figure(out, p):
-    import matplotlib
+    from _style import apply_style  # selects the Agg backend on import
 
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    plt.rcParams.update(
-        {
-            "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
-            "axes.titlesize": 10, "axes.labelsize": 9,
-            "axes.spines.top": False, "axes.spines.right": False,
-            "legend.frameon": False,
-        }
-    )
+    apply_style()
 
     fin, mem = out["final"], out["memorize"]
     K = (p - 1) // 2

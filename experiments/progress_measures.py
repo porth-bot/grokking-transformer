@@ -118,19 +118,11 @@ def _read_csv(path: Path) -> dict[str, list[float]]:
 
 def figure(csv_path: Path = RUNS / f"{NAME}.csv") -> None:
     """Render the trajectory figure from the committed CSV (no retraining)."""
-    import matplotlib
+    from _style import apply_style  # selects the Agg backend on import
 
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    plt.rcParams.update(
-        {
-            "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
-            "axes.titlesize": 10, "axes.labelsize": 9,
-            "axes.spines.top": False, "axes.spines.right": False,
-            "legend.frameon": False,
-        }
-    )
+    apply_style()
 
     d = _read_csv(csv_path)
     with open(csv_path.with_suffix(".json")) as f:

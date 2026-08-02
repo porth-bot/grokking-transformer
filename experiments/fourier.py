@@ -30,14 +30,9 @@ from pathlib import Path
 
 from grokking.checkpoints import load_model
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
-        "axes.titlesize": 10, "axes.labelsize": 9,
-        "axes.spines.top": False, "axes.spines.right": False,
-        "legend.frameon": False,
-    }
-)
+from _style import apply_style  # noqa: E402
+
+apply_style()
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = "p97_frac0.30_wd1_seed0"

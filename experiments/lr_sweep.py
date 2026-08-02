@@ -32,14 +32,9 @@ LRS = [3e-4, 1e-3, 3e-3]
 COLORS = {3e-4: "C3", 1e-3: "C0", 3e-3: "C1"}
 MAX_STEPS = 25_000
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
-        "axes.titlesize": 10, "axes.labelsize": 9,
-        "axes.spines.top": False, "axes.spines.right": False,
-        "legend.frameon": False,
-    }
-)
+from _style import apply_style  # noqa: E402
+
+apply_style()
 
 
 def cfg_for(lr):

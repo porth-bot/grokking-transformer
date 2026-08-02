@@ -37,14 +37,9 @@ RUNS = ROOT / "runs"
 FIGS = ROOT / "figures"
 HEADS = [1, 2, 4]
 
-plt.rcParams.update(
-    {
-        "figure.dpi": 150, "savefig.dpi": 150, "font.size": 9,
-        "axes.titlesize": 10, "axes.labelsize": 9,
-        "axes.spines.top": False, "axes.spines.right": False,
-        "legend.frameon": False,
-    }
-)
+from _style import apply_style  # noqa: E402
+
+apply_style()
 
 
 def run_head(n_heads):
