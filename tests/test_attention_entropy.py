@@ -13,6 +13,8 @@ interpretation rather than a measurement.
 """
 
 import math
+import sys
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -165,3 +167,51 @@ def test_asymmetry_and_entropy_are_not_the_same_measurement():
     model, tokens = _loaded("final")
     assert eq_operand_asymmetry(model, tokens) < 1e-3
     assert eq_attention_entropy(model, tokens) > SYMMETRIC_2 + 0.25
+
+
+# -- the committed trajectory ------------------------------------------------
+#
+# The figure and the README both read this CSV, so the shape of the trajectory
+# is worth pinning: the four regimes are the result, and a silent regression in
+# the read-out would show up here as a flat or monotone curve.
+
+
+def _trajectory():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "experiments"))
+    import attention_entropy
+
+    return attention_entropy.summarize()
+
+
+def test_committed_trajectory_shows_the_four_regimes():
+    """Symmetric at init, broken while memorizing, restored at the jump, and a
+    self-attention channel that opens only afterwards."""
+    s = _trajectory()
+
+    # 1. init is already at the algorithmic symmetry (a near-uniform softmax is)
+    assert abs(s["operand_entropy_at_init"] - SYMMETRIC_2) < 1e-4
+    assert abs(s["entropy_at_init"] - UNIFORM_3) < 1e-3
+    assert abs(s["operand_frac_at_init"] - 2 / 3) < 0.02
+    assert s["asymmetry_at_init"] < 0.01
+
+    # 2. memorization breaks it, and concentrates the row onto the operands
+    assert s["operand_entropy_min"] < SYMMETRIC_2 - 0.03
+    assert s["asymmetry_peak"] > 0.15
+    assert s["operand_frac_at_memorize"] > 0.99
+
+    # 3. grokking restores it
+    assert abs(s["operand_entropy_final"] - SYMMETRIC_2) < 1e-4
+    assert s["asymmetry_final"] < 1e-3
+
+    # 4. and the constant channel opens only after the jump, then fluctuates
+    assert s["operand_frac_postgrok_min"] < 0.90 < s["operand_frac_postgrok_max"]
+
+
+def test_the_symmetry_is_restored_after_the_jump_not_before_it():
+    """The claim the experiment was built to test, and it came out the boring
+    way: unlike §10's restricted loss, this read-out does not anticipate
+    grokking. Stated as a test so a later run that reverses it has to say so.
+    """
+    s = _trajectory()
+    assert s["step_symmetry_restored"] > s["step_test_acc_half"]
+    assert s["step_symmetry_restored"] > s["grok_step"]

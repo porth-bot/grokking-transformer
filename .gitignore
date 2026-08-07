@@ -24,7 +24,9 @@ runs_lr/*.pt
 # OS
 .DS_Store
 
-# Throwaway training side-artifacts from the progress-measure run (the
-# committed output is runs/progress_*.csv; the trainer would otherwise reuse
-# the main run name and overwrite it).
+# Throwaway training side-artifacts from the instrumented reruns of the main
+# config (the committed outputs are runs/progress_*.csv and
+# runs/attention_*.csv; the trainer would otherwise reuse the main run name and
+# overwrite it).
 runs_progress/
+runs_attention/

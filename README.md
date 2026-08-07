@@ -434,6 +434,51 @@ retraining):
 
   ![attention](figures/attention_pattern.png)
 
+- **Attention entropy along the trajectory**
+  ([`attention_entropy.py`](experiments/attention_entropy.py)). The read-out
+  above is two checkpoints; this is the same statistics at every eval step, and
+  the path has two regimes the endpoints cannot show. Entropies are in nats,
+  with $\ln 3 = 1.099$ (flat over the three positions) and $\ln 2 = 0.693$
+  (half on `a`, half on `b`, none on `=`) as the reference levels.
+
+  | | init | memorization | grok step | end of run |
+  |---|---|---|---|---|
+  | full `"="` row entropy | 1.098 | 0.677 | 0.826 | 0.935 |
+  | operands only, renormalized | 0.6931 | 0.658 | 0.686 | 0.6931 |
+  | operand weight | 0.673 | 0.997 | 0.960 | 0.909 |
+  | per-head $\lvert A_{=\to a} - A_{=\to b}\rvert$ | 0.004 | 0.189 | 0.083 | 0.0004 |
+
+  Read the second row first. **A randomly initialized model is already at the
+  algorithmic symmetry** ($\ln 2$, exactly — a near-uniform softmax is
+  commutative for free). Memorization *destroys* it, driving the operand
+  entropy down to 0.658 and the per-head asymmetry from 0.004 to 0.189 while
+  concentrating 99.7% of the row onto the operands. Grokking then puts it back,
+  to $\ln 2$ to five decimals on every head. The model does not learn
+  commutativity so much as recover it.
+
+  The first row is the same trajectory read through the usual "attention
+  sharpens" lens, and that lens is wrong twice over here: entropy *rises*
+  through grokking (0.677 → 0.935), because commutativity makes an even operand
+  split correct rather than sloppy, and because after the jump a self-attention
+  channel opens — the operand weight falls to 0.83–0.98 and fluctuates from eval
+  to eval. That channel carries no information: position 2 is the `=` token in
+  every example, so the value vector the `=` query pulls from itself has an
+  across-batch standard deviation of exactly zero. It is a learned bias, and
+  dividing it out is what the second row does.
+
+  What this does **not** show, since it was the motivating question: the
+  symmetry is restored at step 2300, *after* test accuracy passes 0.5 (1500) and
+  after the grok step (1900). Unlike §10's restricted loss, this read-out is a
+  lagging indicator, not an early warning. Seed 0 only, like the other
+  mechanistic read-outs pending
+  [issue #4](https://github.com/porth-bot/grokking-transformer/issues/4). The
+  instrumented rerun stops on patience near step 4500, so its last column is not
+  the 25000-step checkpoint the row above uses (0.935 vs 1.024 nats, 0.909 vs
+  0.837 operand weight) — both sit inside the post-grok fluctuation band, which
+  is the point.
+
+  ![attention entropy](figures/attention_entropy.png)
+
 - **Embedding ring** ([`embedding_circle.py`](experiments/embedding_circle.py)).
   Projected onto the dominant frequency's (cos, sin) plane, the grokked digit
   embeddings trace a clean circle (radial CV 0.13, up from a diffuse 0.41 at
@@ -477,6 +522,7 @@ python experiments/progress_measures.py  # §10 trajectory of progress measures 
 python experiments/operations.py         # §11 subtraction/multiplication vs addition (12 runs, 55 min; addition reuses the sweep CSVs)
 python experiments/embedding_circle.py   # appendix: embedding ring (checkpoints only)
 python experiments/attention_pattern.py  # appendix: attention symmetry (checkpoints only)
+python experiments/attention_entropy.py  # appendix: attention entropy trajectory (reruns the main config, ~3 min CPU)
 python experiments/plots.py              # §1-2 figures from committed CSVs (no training needed)
 python experiments/reproduce_figures.py  # every figure from committed logs, no training
 ```

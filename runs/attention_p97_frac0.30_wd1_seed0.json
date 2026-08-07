@@ -1,0 +1,8 @@
+{
+  "memorize_step": 100,
+  "grok_step": 1900,
+  "steps_run": 4500,
+  "n_heads": 4,
+  "uniform_entropy": 1.0986122886681098,
+  "symmetric_entropy": 0.6931471805599453
+}
