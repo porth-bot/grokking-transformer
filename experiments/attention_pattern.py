@@ -8,10 +8,12 @@ checkpoints (no retraining) and averages it over all p^2 examples.
 
 Two facts come out, and the second is the grokking story:
 
-1. In BOTH the memorization-point and the grokked model, the "=" token spends
-   almost all of its weight on the two operand positions a and b, and almost
-   none on itself -- there is nothing at the "=" slot to read except the
-   operands, and the causal mask forbids looking ahead anyway.
+1. Most of the "=" token's weight goes to the two operand positions a and b in
+   both checkpoints -- but by different margins, 99.7% at memorization against
+   83.7% after grokking. The remaining 16% returns to the "=" position itself,
+   whose value vector is the same for every input (position 2 is always the "="
+   token), so that channel adds a constant vector rather than reading anything.
+   grokking/attention.py measures the split and tests the constancy.
 
 2. Grokking *symmetrizes* that read. Addition is commutative (a + b = b + a),
    so the algorithmic solution should treat the two operands interchangeably.
