@@ -336,9 +336,18 @@ So: the isomorphism explains why multiplication groks **at all**, and explains
 nothing about speed. The surviving hypothesis for the subtraction gap is
 commutativity — subtraction is the only non-commutative operation of the
 three, and Exercise 3 shows the addition model spends its grokking transition
-acquiring exactly that symmetry, which a subtraction model cannot use. README
-§11's "Next" asks for the measurement that would test it: the swap-equivariance
-read-out of Exercise 3, run on the subtraction checkpoints.
+acquiring exactly that symmetry, which a subtraction model cannot use.
+
+That has since been measured, by running Exercise 3's read-out on the
+subtraction checkpoints (README §11, `experiments/swap_equivariance.py`), with
+one generalization it needed: subtraction cannot be *invariant* under the swap,
+so the statistic to ask it about is *anti*-equivariance, $L(a,b) = L(b,a)[-c]$,
+which is what $a-b = -(b-a)$ licenses. Grokking turns out to acquire whichever
+of the two the operation has — addition's invariance defect falls to 0.010
+while subtraction's *rises* to the no-symmetry level and its anti-equivariance
+defect falls 3.8× instead. So commutativity survives as the distinguishing
+property. What it does not yet explain is why subtraction's version of the
+symmetry is 27× looser than addition's and varies by 3.4× across seeds.
 </details>
 
 ## References

@@ -387,9 +387,8 @@ and weak weight decay, **three seeds per cell**:
   here**, and the appendix's attention read-out shows grokking *symmetrizes* how
   the "=" position reads the two operands (per-head |A[=→a] − A[=→b]| falls
   0.19 → 0.00). A commutative target lets that symmetric circuit serve; a
-  non-commutative one forbids it. That is a hypothesis this experiment motivates
-  but does not test — the check would be re-running the attention symmetry
-  measurement on the subtraction checkpoints, which is not done here.
+  non-commutative one forbids it. **That hypothesis is now tested** — on the
+  subtraction checkpoints, below.
 - **Three seeds is not a distribution**, the same caveat as the wd/frac bands in
   §3. The claims above are stated at the resolution the ranges support:
   disjoint ranges (sub vs the rest) treated as real, overlapping ones (mul vs
@@ -397,6 +396,61 @@ and weak weight decay, **three seeds per cell**:
 
 Only the sub/mul runs are computed; the addition rows reuse the committed
 multi-seed sweep CSVs ([`operations.py`](experiments/operations.py)).
+
+#### Testing the commutativity hypothesis (`experiments/swap_equivariance.py`)
+
+The hypothesis above needs a control, because "grokking symmetrizes the operand
+read" could just as easily be a fact about *grokking* as a fact about
+commutativity — and the read-out had only ever been run on addition. So run it
+on subtraction, where the task forbids the symmetry.
+
+One thing has to be right first. Demanding $L(a,b) = L(b,a)$ of a subtraction
+model is demanding that it be **wrong**, so a defect there would show nothing.
+What $a - b = -(b-a)$ licenses instead is *anti*-equivariance: swapping the
+operands negates the answer, so the logit vector should come back permuted by
+$c \mapsto -c \bmod p$. Both statistics are computed for both operations, each
+normalized by the logits' own sd, against a **shuffle baseline** of 1.11 — the
+level a defect reads when each input is paired with a random other input, i.e.
+when there is no symmetry to find.
+
+| $wd = 1$, 3 seeds | invariance $L(a,b)$ vs $L(b,a)$ | anti-equivariance $L(a,b)$ vs $L(b,a)[-c]$ |
+|---|---|---|
+| add, memorized | 0.560 &nbsp;[0.50, 0.61] | 1.108 &nbsp;[1.11, 1.13] |
+| add, grokked | **0.010** &nbsp;[0.00, 0.03] | 1.076 &nbsp;[1.04, 1.11] |
+| sub, memorized | 0.807 &nbsp;[0.80, 0.83] | 1.034 &nbsp;[1.03, 1.06] |
+| sub, grokked | 1.086 &nbsp;[1.04, 1.09] | **0.271** &nbsp;[0.15, 0.51] |
+
+**Grokking does not buy commutativity. It buys whichever swap symmetry the
+operation actually has.** Addition's invariance defect collapses to 0.010 while
+the symmetry it does *not* have stays pinned at the no-symmetry level.
+Subtraction goes the other way in both columns: its invariance defect *rises*
+to 1.086, essentially the shuffle baseline — it has to order its operands, and
+grokking makes it better at that, not worse — while the symmetry it is allowed
+falls 3.8×. §11's own attention statistic agrees, 0.148 → 0.002 for addition
+against 0.324 → 0.465 for subtraction. The commutativity hypothesis survives
+the control.
+
+Two things that do not fit the clean story, and belong here rather than in a
+footnote:
+
+- **Subtraction's symmetry is acquired far less completely.** 0.271 against
+  addition's 0.010 is 27×, and its seed spread (0.15–0.51, a factor of 3.4)
+  against addition's 0.00–0.03 says it is not even a stable quantity. Whatever
+  the subtraction model is doing, it is not the tidy exact symmetry the
+  addition model reaches — which is at least consistent with subtraction being
+  the slowest of the three to grok, though this does not show that it is why.
+- **At $wd = 0.1$ only one subtraction seed of three generalized at all** (the
+  same as §11 measured), so that cell is a single run, not a median, and it is
+  filtered and labelled as one. Its anti-equivariance defect is 0.553; the two
+  failed seeds sit at 0.86 and 0.97, near the no-symmetry level, which is what
+  a run that never found the structure should look like.
+
+<p align="center"><img src="figures/swap_equivariance.png" width="900"></p>
+
+The sweep's checkpoints are not committed (`.gitignore` keeps `.pt` files out),
+so the read-outs are committed instead as a 3 KB CSV and the figure replays
+from that; a test re-measures the one run whose weights *are* in the repo and
+requires the CSV to match it.
 
 ### Appendix: attention and embedding geometry
 
@@ -558,11 +612,12 @@ replay path and that every artifact the replay reads is committed.
 
 - wd × frac interaction surface (a coarse 2D grid); seed-averaged versions of
   the mechanistic read-outs.
-- Test §11's commutativity hypothesis directly: re-run the appendix's
-  attention-symmetry measurement on the subtraction checkpoints, where the
-  symmetric read the addition model converges to is not available. Division
-  (the multiplicative-group inverse, undefined at b=0) as the next comparative
-  operation.
+- Division (the multiplicative-group inverse, undefined at $b=0$) as the next
+  comparative operation — and the one whose swap symmetry is a third case
+  again, since $a/b$ and $b/a$ are reciprocals rather than negations.
+- Why subtraction's acquired symmetry is 27× looser than addition's and swings
+  by 3.4× across seeds (§11). The measurement is there; the explanation is not,
+  and "it is the hardest operation" restates it rather than accounting for it.
 
 ## References
 
