@@ -1,0 +1,18 @@
+{
+  "p": 97,
+  "seeds": [
+    0,
+    1,
+    2
+  ],
+  "weight_decays": [
+    "1",
+    "0.1"
+  ],
+  "operations": [
+    "add",
+    "sub"
+  ],
+  "grokked_threshold": 0.8,
+  "n_checkpoints": 24
+}
