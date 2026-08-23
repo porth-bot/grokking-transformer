@@ -102,10 +102,51 @@ def test_seed_zero_is_the_most_flattering_seed_on_most_read_outs(rows):
     """The reason the issue existed. Sec. 9 found seed 0 was the *slowest* run
     in all three arms -- pessimistic on timing. On the mechanistic read-outs it
     is the opposite: it holds the extreme in the direction the README's story
-    points on 8 of the 13, which is why the published contrasts are the largest
-    available rather than typical."""
+    points on 8 of the 13, and lies outside the other four's whole range on 7,
+    which is why the published contrasts are the largest available rather than
+    typical."""
     best, total = ms.seed_zero_summary(rows)
     assert (best, total) == (8, 13)
+    assert set(ms.seed_zero_outside(rows)) == {
+        "emb_top5_energy", "emb_freqs_90", "emb_var_in_plane",
+        "attn_operand_entropy", "attn_asymmetry", "eq_attn_defect",
+        "eq_logit_swap",
+    }
+
+
+def test_the_five_runs_are_not_the_same_length(rows):
+    """The confound behind the line above, and the reason it is not read as
+    "seed 0 is a lucky seed": seed 0's run was extended to 11,100 steps (Sec. 5
+    explains why) and the others early-stop on patience at ~2,000, so its final
+    checkpoint has ~9,000 extra steps of decay after grokking -- over which
+    Sec. 5's own numbers show the circuit continuing to sparsify."""
+    steps = {r["seed"]: r["steps_run"] for r in rows if r["which"] == "final"}
+    assert steps[0] == 11_100
+    assert all(1_800 <= steps[s] <= 2_100 for s in ms.MATCHED_SEEDS)
+    assert steps[0] - max(steps[s] for s in ms.MATCHED_SEEDS) == 9_000
+    # Both checkpoints of a run are the same run, so the columns must agree.
+    for seed in ms.SEEDS:
+        pair = [r["steps_run"] for r in rows if r["seed"] == seed]
+        assert pair[0] == pair[1]
+    # Memorization, by contrast, is at step 100 in every seed -- that arm is
+    # matched, which is why only the "final" arm carries the caveat.
+    assert {r["memorize_step"] for r in rows} == {100.0}
+
+
+def test_dropping_the_long_run_leaves_the_conclusions_standing(rows):
+    """The robustness check the confound demands. Four seeds per arm still
+    permits a complete separation (C(8,4) = 70, floor p = 0.029), and 12 of 13
+    read-outs still get one -- so the long run carries the effect *sizes* and
+    none of the conclusions. The exception is the same read-out that was
+    already the weakest at five seeds."""
+    checks = ms.matched_length_check(rows)
+    incomplete = [(f, p) for f, p, complete in checks if not complete]
+    assert len(checks) - len(incomplete) == 12
+    assert [f for f, _ in incomplete] == ["attn_operand_frac"]
+    assert incomplete[0][1] == pytest.approx(0.114, abs=1e-3)
+    for field, p, complete in checks:
+        if complete and not np.isnan(p):
+            assert p == pytest.approx(2 / 70), field
 
 
 def test_the_published_symmetry_numbers_are_the_extremes_of_their_arms(rows):

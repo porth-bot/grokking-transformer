@@ -53,10 +53,13 @@ and final) so "before vs after" is a comparison within a single trajectory.
 
 All runs: $p = 97$, 1 layer, $d_{\text{model}} = 128$, 4 heads, lr $10^{-3}$,
 full-batch AdamW. The weight-decay and data-fraction sweeps below run **5 seeds
-per cell** and report the median with the min–max range; the mechanistic
-single-run analyses (§3–6 and the Fourier/attention/embedding read-outs) stay
-on seed 0, which is what the hero figure shows. Logs in [`runs/`](runs/),
-regenerate figures with `python experiments/plots.py`.
+per cell** and report the median with the min–max range. The mechanistic
+read-outs — Fourier spectrum, logit attribution, attention pattern, embedding
+ring — are *shown* on seed 0, which is the run whose checkpoints are committed
+and what the hero figure plots, and are **measured across the same five seeds
+in §12**; where the seed-averaged number differs from seed 0's, both are given
+and §12 is the one to believe. Logs in [`runs/`](runs/), regenerate figures
+with `python experiments/plots.py`.
 
 ### 1. Weight decay controls whether — and when — grokking happens
 
@@ -175,6 +178,15 @@ the accuracy jump (our early-stopped checkpoint showed 40%; 3k steps later,
 57%) — the "sudden" jump is a thresholding artifact of accuracy, not a
 discontinuity in the weights.
 
+That last observation is also the reason **56.7% is not a typical number**.
+Across the five seeds the top-5 share is **15.4%** [13.6–16.5] → **41.4%**
+[29.2–56.7] (§12), with seed 0 the sparsest of the five — and seed 0 is the run
+extended to 11k steps, while the others stop at ~2k, i.e. the one run given
+9,000 extra steps of exactly the consolidation just described. Which
+frequencies is seed-specific too; every seed picks a different handful. What is
+portable is the count: reaching 90% of the embedding energy takes **42 of 48**
+frequencies at memorization and **20** [11–28] after grokking, in every seed.
+
 ### 6. Is it the norm specifically, or any regularizer? (A dropout control)
 
 Section 5 shows weight decay generalizing by pulling the weight norm down, and
@@ -245,20 +257,38 @@ all its energy on the diagonal $k_a=k_b$.
 |---|---|---|
 | at memorization | **12%** (diffuse) | 0.17 |
 | after grokking | **98%** (it computes the sum) | **1.00** |
+| *the same, over 5 seeds (§12)* | *19% [12–24] → 97.5% [94.9–98.4]* | *0.25 [0.17–0.35] → 0.97 [0.93–1.00]* |
 
 ![logit attribution](figures/logit_attribution.png)
 
+The reference those percentages need: unstructured logits put
+$2\cdot 48/(p^2-1) = 1.0\%$ of their energy on that diagonal, not 0. So
+memorization's 19% is already 19× chance — which is the next paragraph's point
+— and the grokked model is near the ceiling.
+
 Keeping only the top-$m$ diagonal frequencies and inverse-transforming rebuilds
 the logits from *just those frequencies* — a static, hand-built version of Nanda
-et al.'s **restricted loss** (§10 makes it a training trajectory). Three frequencies, $k\in\{3,36,48\}$, rebuild the grokked model's
-**full 100%** test accuracy. Two further things fall out. The dominant logit
-frequencies substantially overlap the dominant *embedding* frequencies (§5) —
-the sparse basis the embeddings carry is the basis the logits are written in.
+et al.'s **restricted loss** (§10 makes it a training trajectory). Three
+frequencies, $k\in\{3,36,48\}$, rebuild the grokked model's **full 100%** test
+accuracy; across five seeds three frequencies give 0.97 and it takes **3 to 5**
+(mean 3.8) to clear 0.99, so "a handful" is right and "three" is seed 0's.
+Two further things fall out.
+
+The dominant logit frequencies substantially overlap the dominant *embedding*
+frequencies (§5) — **3.0 of 5 shared against a chance level of 0.52** — so the
+sparse basis the embeddings carry is the basis the logits are written in. But
+that overlap is **3.4 of 5 at the memorization checkpoint too** (§12), so it is
+a fact about this architecture and not a signature of grokking; the original
+version of this sentence implied the latter.
+
 And projecting the **memorization** checkpoint's logits onto the clean $a+b$
 subspace recovers far more test accuracy (top-10 freqs → 0.79) than the raw
 memorizing model expresses (0.16): the generalizing circuit is already forming,
 drowned out by per-pair memorization, *before* the test-accuracy jump — the
 same "gradual then sudden" story the progress measures will make quantitative.
+This is the one claim here that got **stronger** with seeds: 0.82 [0.77–0.88]
+against the model's own 0.25 [0.16–0.30], with every seed's projection above
+every seed's raw accuracy.
 
 ### 9. Does grokking need multiple heads? (No — and one wide head groks ~4× sooner, over five seeds)
 
@@ -493,6 +523,130 @@ so the read-outs are committed instead as a 3 KB CSV and the figure replays
 from that; a test re-measures the one run whose weights *are* in the repo and
 requires the CSV to match it.
 
+### 12. Are the mechanistic numbers typical? (Five seeds, and where seed 0 sits)
+
+Everything above that reads structure out of *weights* — the Fourier spectrum
+(§5), the logit attribution (§8), the attention pattern and embedding ring
+(appendix) — was measured on one run's two checkpoints, because seed 0 is the
+run whose weights are committed. That is thirteen read-outs from one pair of
+files. §9 put five seeds behind a *timing* claim and found the ordering held
+while the level moved; this asks the same question of the mechanism.
+
+Same five seeds, same main config, both checkpoints, and the same exact
+rank-sum permutation test §9 uses (C(10,5) = 252 relabelings, so no p-value can
+fall below 0.008). Mean [min–max] across seeds:
+
+| read-out | at memorization | after grokking | $p$ | separation |
+|---|---|---|---|---|
+| top-5 embedding energy share | 0.154 [0.136–0.165] | 0.414 [0.292–0.567] | 0.008 | complete |
+| embedding freqs for 90% energy (of 48) | 42.2 [42–43] | 20.0 [11–28] | 0.008 | complete |
+| embedding ring radial CV | 0.343 [0.304–0.399] | 0.130 [0.095–0.202] | 0.008 | complete |
+| variance in the ring plane *(noise floor 0.040)* | 0.043 [0.040–0.046] | 0.103 [0.072–0.161] | 0.008 | complete |
+| logit energy on the $a{+}b$ diagonal | 0.192 [0.123–0.240] | 0.975 [0.949–0.984] | 0.008 | complete |
+| diagonal freqs for 90% energy | 25.4 [20–34] | 8.8 [7–10] | 0.008 | complete |
+| freqs to rebuild 99% test acc | never | 3.8 [3–5] | — | complete |
+| full "=" row entropy (nats, max $\ln 3$) | 0.751 [0.677–0.809] | 0.912 [0.819–1.030] | 0.008 | complete |
+| operand entropy (max $\ln 2 = 0.6931$) | 0.678 [0.658–0.692] | 0.6931 [0.6930–0.6931] | 0.008 | complete |
+| per-head $\lvert A_{=\to a} - A_{=\to b}\rvert$ | 0.119 [0.043–0.189] | 0.0040 [0.0001–0.0133] | 0.008 | complete |
+| attention equivariance defect | 0.119 [0.044–0.189] | 0.0042 [0.0002–0.0133] | 0.008 | complete |
+| logit swap defect | 0.475 [0.333–0.614] | 0.0157 [0.0042–0.0258] | 0.008 | complete |
+| **attention weight on the operands** | **0.981 [0.960–0.997]** | **0.909 [0.831–0.966]** | **0.032** | **partial** |
+
+![mechanistic seeds](figures/mechanistic_seeds.png)
+
+**Twelve of thirteen separate completely** — no memorization checkpoint on the
+wrong side of any final one, which at five seeds per arm is the strongest
+statement available and produces the floor p-value. The qualitative story
+survives everywhere.
+
+**The published numbers do not, and they fail in one direction.** Seed 0 holds
+the extreme in the flattering direction on **8 of the 13** read-outs and lies
+outside the other four's *entire range* on **7**, so nearly every contrast in
+§5, §8 and the appendix is the largest one the five seeds contain:
+
+| the README said | it is |
+|---|---|
+| 12% → 98% on the $a{+}b$ diagonal | 19% → 97.5% |
+| equivariance defect 0.189 → 0.00017 (1100×) | 0.119 → 0.0042 (28×) |
+| top-5 embedding share 13.6% → 56.7% | 15.4% → 41.4% |
+| three frequencies rebuild 100% | 3–5 frequencies; three give 0.97 |
+| operand weight 99.7% → 83.7% | 98.1% → 90.9%, ranges overlapping |
+
+#### It is not a lucky seed, and that is the more interesting answer
+
+The natural conclusion — one run happened to be a good one — is the wrong one,
+and the evidence against it was in this repo the whole time. **The five runs are
+not the same length.** Seed 0 was deliberately extended to **11,100 steps** (§5
+says why: stopping at the jump hides the weight norm's decline), while the other
+four early-stop on patience at **1,800–2,100**. So seed 0's "final" checkpoint
+has ~9,000 more steps of weight decay after grokking than any other — and §5's
+own committed measurement is that the circuit *keeps sparsifying* over exactly
+that interval, 40% → 57% top-5 share over 3k extra steps.
+
+The seven read-outs where seed 0 is outside the pack are the ones that
+consolidation would move: sparsity of the embedding spectrum, the ring's
+variance share, and all three symmetry defects. With one long run there is no
+way to separate "lucky seed" from "trained longer", so the honest thing to do is
+drop it. Every test above, rerun on **seeds 1–4 alone** — four per arm still
+permits a complete separation, C(8,4) = 70, floor $p = 0.029$:
+
+> **12 of 13 read-outs still separate completely.** The exception is the same
+> one: operand weight, now at $p = 0.114$, not significant at all.
+
+So the confound reaches the **effect sizes** and none of the conclusions. What
+this repo cannot currently say is how much of "grokking sparsifies the circuit"
+is grokking and how much is the 9,000 steps afterwards; answering that needs the
+four short runs retrained to a matched budget, which has not been done.
+
+Worth putting next to **§9**, where the same seed 0 was the *slowest* run in all
+three head-count arms: the shipped timing numbers were uniformly pessimistic and
+the shipped mechanistic numbers are uniformly flattering. Those are not the same
+phenomenon — the timing spread is seed noise, while the mechanistic gap traces
+to a run length that was chosen by hand — but the lesson is: **a single-run
+table cannot tell you which kind of run it got, in either direction.**
+
+**The one that does not hold.** The "=" token's operand weight, published as
+99.7% → 83.7%, separates only partially ($p = 0.032$): two grokked runs keep
+more operand weight than the least concentrated memorizing one, and **seed 2
+moves it the wrong way entirely** (0.960 → 0.966). The appendix's own
+explanation — that a constant-bias self-attention channel opens after the jump,
+and fluctuates from eval to eval — predicts exactly this kind of instability,
+so the finding is that the *size* of the fall was never measurable from one
+run.
+
+**Two claims turned out not to be about grokking.** §8 offered the overlap
+between the dominant logit frequencies and the dominant embedding frequencies
+as evidence the logits are written in the embeddings' basis. It is well above
+chance (3.0 of 5, against 0.52 expected) — and it is 3.4 of 5 *at memorization*,
+so it does not separate the checkpoints and cannot be evidence about the
+transition. And the embedding ring's variance-in-plane at memorization (4.3%)
+is the level unstructured Gaussian embeddings reach (4.0%), so that statistic is
+pure noise floor there; only the radial CV carries anything.
+
+The restricted-accuracy curve, which is §8's headline read in full:
+
+| top-$m$ diagonal freqs kept | at memorization | after grokking |
+|---|---|---|
+| 1 | 0.041 [0.026–0.060] | 0.117 [0.090–0.142] |
+| 2 | 0.107 [0.078–0.133] | 0.534 [0.440–0.661] |
+| 3 | 0.251 [0.166–0.350] | 0.971 [0.928–1.000] |
+| 5 | 0.469 [0.337–0.597] | 0.998 [0.991–1.000] |
+| 10 | 0.817 [0.774–0.880] | 1.000 |
+| *the model itself* | *0.247 [0.163–0.303]* | *1.000* |
+
+Read the last two rows together: at **every** seed, ten frequencies of the
+memorizing model's own logits beat the memorizing model — 0.82 against 0.25,
+with complete separation. §8's most interesting claim is the one that got
+stronger.
+
+Ten checkpoints, nine of them gitignored, so the read-outs are a committed CSV
+and the figure replays from it alone
+([`mechanistic_seeds.py`](experiments/mechanistic_seeds.py)); a test re-measures
+seed 0's two rows from the committed weights, and the negatives above — seed 2's
+reversal, the overlap that does not separate, the noise-floor variance — are
+asserted too, since those are the ones a later edit would smooth over. Closes
+[issue #4](https://github.com/porth-bot/grokking-transformer/issues/4).
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -505,12 +659,20 @@ retraining):
   ahead), but not equally so in the two checkpoints: **99.7%** at memorization
   against **83.7%** after grokking, the rest returning to the "=" position
   itself. That difference is not a leak; the entropy read-out below takes it
-  apart. What grokking changes is the *symmetry*: the grokked heads split
+  apart. **It is also the one read-out in this repo that does not survive
+  seed-averaging intact** — 99.7% and 83.7% are the two extremes of their arms,
+  the five-seed contrast is 98.1% [96.0–99.7] → 90.9% [83.1–96.6] with the
+  ranges overlapping (p = 0.032, not a complete separation), and one seed moves
+  it the *wrong way* (§12). The fall is real on average; its size is not what
+  seed 0 suggests.
+
+  What grokking changes is the *symmetry*: the grokked heads split
   their operand
   attention almost exactly evenly (per-head $|A_{=\to a} - A_{=\to b}|$ falls
   from **0.19** to **0.00**), matching the commutativity $a + b = b + a$ that
   the general algorithm must respect, whereas the memorizing heads are
-  lopsided (one puts 0.74 on `a`, 0.25 on `b`).
+  lopsided (one puts 0.74 on `a`, 0.25 on `b`). That one separates every seed
+  from every seed: 0.119 [0.043–0.189] → 0.0040 [0.0001–0.0133].
 
   That statistic is averaged over the dataset, and Exercise 3 of
   [`theory/notes.md`](theory/notes.md) works out what averaging makes it mean:
@@ -526,6 +688,16 @@ retraining):
   moves the memorizing model's logits by 0.61 of their own standard deviation,
   against 0.004 for the grokked one. The memorizing model computes a
   materially non-commutative function; the grokked one does not.
+
+  Both of those pairs are min-to-max across the five seeds, so the **1100×**
+  they suggest is the largest drop available; the seed-averaged contrasts are
+  0.119 → 0.0042 (**28×**) for the attention defect and 0.475 → 0.016 (30×) at
+  the logits. Every seed separates from every seed on both (p = 0.008, the
+  floor at five vs five), so the conclusion is unchanged and the effect size
+  quoted from seed 0 was 40× too generous. Both defects are among the seven
+  read-outs where seed 0 lies outside the other four's whole range, which §12
+  attributes to its run being 11.1k steps against their ~2k rather than to the
+  seed. §12 has the table.
 
   ![attention](figures/attention_pattern.png)
 
@@ -564,9 +736,10 @@ retraining):
   What this does **not** show, since it was the motivating question: the
   symmetry is restored at step 2300, *after* test accuracy passes 0.5 (1500) and
   after the grok step (1900). Unlike §10's restricted loss, this read-out is a
-  lagging indicator, not an early warning. Seed 0 only, like the other
-  mechanistic read-outs pending
-  [issue #4](https://github.com/porth-bot/grokking-transformer/issues/4). The
+  lagging indicator, not an early warning. The *trajectory* is seed 0 only —
+  it needs an instrumented rerun, not just checkpoints — but its two endpoints
+  are in §12's five-seed table, where the full-row entropy rises in every seed
+  (0.751 → 0.912) and the operand entropy reaches $\ln 2$ in every seed. The
   instrumented rerun stops on patience near step 4500, so its last column is not
   the 25000-step checkpoint the row above uses (0.935 vs 1.024 nats, 0.909 vs
   0.837 operand weight) — both sit inside the post-grok fluctuation band, which
@@ -578,6 +751,17 @@ retraining):
   Projected onto the dominant frequency's (cos, sin) plane, the grokked digit
   embeddings trace a clean circle (radial CV 0.13, up from a diffuse 0.41 at
   memorization) — the geometric face of the Fourier sparsification above.
+  Across seeds: **0.343** [0.304–0.399] → **0.130** [0.095–0.202], complete
+  separation.
+
+  "Diffuse" turns out to be an understatement, and it took a baseline to see
+  it. Gaussian embeddings with no structure at all read a radial CV of
+  **0.428** and put **4.0%** of their variance in that plane
+  (`mechanistic.random_ring_baseline`, 20 draws) — the 4% rather than the naive
+  $2/d_{\text{model}} = 1.6\%$ because the frequency is chosen as the best of
+  48, and that selection inflates it. The memorization checkpoint reads 4.3%,
+  i.e. **exactly the noise floor**: the variance-in-plane statistic carries no
+  signal there, and only the radial CV (0.343, about 20% below noise) does.
 
   ![embedding ring](figures/embedding_circle.png)
 
@@ -636,17 +820,28 @@ replay path and that every artifact the replay reads is committed.
 
 ## Honest limitations
 
-- **Five seeds, not a distribution.** The wd and frac sweeps now carry
-  min–max ranges over 5 seeds (§1–2), enough to show the between-cell gaps
-  survive seed noise but too few to trust the range as a real spread — treat
-  it as a rough error bar, not a confidence interval. The *mechanistic*
-  read-outs (Fourier spectrum, attention pattern, embedding ring, §5 and
-  appendix) are still single-run (seed 0); their qualitative claims are not
-  yet seed-averaged ([issue
-  #4](https://github.com/porth-bot/grokking-transformer/issues/4)). §9's
-  head-count read-out is the exception — it carries five seeds per arm and an
-  exact rank-sum test, and is where the format the rest should follow was
-  worked out.
+- **Five seeds, not a distribution.** Every sweep and every mechanistic
+  read-out now carries 5 seeds (§1–2, §9, §12), enough to show the between-cell
+  gaps survive seed noise but too few to trust the range as a real spread —
+  treat it as a rough error bar, not a confidence interval. The exact rank-sum
+  test used throughout cannot return a p-value below 0.008 at five vs five, so
+  "does not separate" and "cannot separate at this sample size" are genuinely
+  different failures and are reported as such. What five seeds cannot do is
+  give a *shape*: every range quoted here is a min–max of five draws, so an
+  outlier is invisible as an outlier.
+- **The main config's five runs are not the same length.** Seed 0 trained
+  11,100 steps (deliberately, §5); seeds 1–4 early-stop on patience at
+  1,800–2,100. So §12's "after grokking" arm mixes one deeply-consolidated
+  checkpoint with four fresh ones, and the effect sizes it reports for the
+  sparsity and symmetry read-outs are not attributable to grokking alone.
+  Dropping seed 0 leaves 12 of 13 separations intact, so the conclusions hold;
+  the sizes are open until the four short runs are retrained to match.
+- **The figures still show seed 0.** §12 measures the mechanistic read-outs
+  across seeds, but the Fourier, logit-attribution, attention and ring figures
+  plot the one run whose checkpoints are committed — and §12's finding is that
+  that run is the flattering end of 8 of 13 read-outs. The numbers in the
+  captions are therefore real and unrepresentative at the same time; the tables
+  next to them say by how much.
 - **Architecture differs from Nanda et al.** (we use LayerNorm + GELU;
   their interp model was LN-free ReLU), which is likely part of why our
   final spectrum is sparse-but-not-extremely-sparse rather than >90%
@@ -656,8 +851,13 @@ replay path and that every artifact the replay reads is committed.
 
 ## Next
 
-- wd × frac interaction surface (a coarse 2D grid); seed-averaged versions of
-  the mechanistic read-outs.
+- wd × frac interaction surface (a coarse 2D grid).
+- **Retrain the main config's seeds 1–4 to a matched 11,100 steps** and redo
+  §12. Right now the five "final" checkpoints are 11.1k, 2.1k, 1.9k, 1.8k and
+  2.0k steps, so how much of the circuit's sparsification is grokking and how
+  much is the decay afterwards is not separable — and §5 measured the
+  afterwards part to be substantial (40% → 57% over 3k steps). This is the
+  largest open measurement in the repo and it is four training runs.
 - Division (the multiplicative-group inverse, undefined at $b=0$) as the next
   comparative operation — and the one whose swap symmetry is a third case
   again, since $a/b$ and $b/a$ are reciprocals rather than negations.

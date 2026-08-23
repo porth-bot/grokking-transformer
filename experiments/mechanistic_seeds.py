@@ -23,6 +23,21 @@ two-sided). What that instrument gives here is the ability to say which
 contrasts are *complete separations* -- no memorization checkpoint on the wrong
 side of any final one -- and which merely have a mean difference.
 
+**The five runs are not the same length, and finding that out changed what
+this experiment concludes.** Seed 0 lies outside the other four's entire range
+on 7 of the 13 read-outs, always in the direction that flatters the story, and
+the obvious reading -- "seed 0 is a lucky seed" -- is probably wrong: its run
+was deliberately extended to 11,100 steps (Sec. 5 explains why) while the
+others early-stop on patience at 1,800-2,100, and Sec. 5's own committed
+numbers show the circuit *keeps sparsifying* after the accuracy jump (top-5
+share 40% -> 57% over 3k extra steps). One long run cannot separate the seed
+from the schedule. What can be done without retraining is to drop it:
+``matched_length_check`` reruns every test on seeds 1-4 alone, where four per
+arm still allows a complete separation (C(8,4) = 70, floor p = 0.029), and 12
+of the 13 survive. So the confound reaches the effect *sizes* and not the
+conclusions, and the ``steps_run`` column is in the CSV so that the next reader
+sees it before drawing the "lucky seed" conclusion I nearly drew.
+
 Artifacts, following the split ``swap_equivariance.py`` and ``head_count.py``
 use: ``.gitignore`` keeps checkpoints out of the repo except seed 0's, so the
 read-outs go in a committed CSV and the figure replays from that CSV alone.
@@ -99,9 +114,21 @@ READOUTS: tuple[tuple[str, str, int], ...] = (
 # measured level of "no symmetry at all" that the defects are read against.
 EXTRA = ("emb_dominant_k", "emb_diag_overlap", "logit_acc_full",
          "eq_logit_anti", "eq_shuffle_baseline")
+# Where in training each checkpoint was taken. These are not read-outs, and
+# they are in the table because of what they turned out to say: seed 0's run
+# was deliberately extended to 11,100 steps (Sec. 5 explains why -- the weight
+# norm's decline is invisible if you stop at the jump) while the other four
+# early-stop on patience at 1,800-2,100. So the five "final" checkpoints are
+# not at a matched point in training, and any statement about which *seed* is
+# extreme has to be read against that first.
+STEPS = ("memorize_step", "grok_step", "steps_run")
 COLUMNS = (("key", "run", "seed", "which")
-           + tuple(k for k, _, _ in READOUTS) + EXTRA
+           + tuple(k for k, _, _ in READOUTS) + EXTRA + STEPS
            + tuple(f"logit_acc_m{m}" for m in RESTRICT_MS))
+# The seeds whose runs stopped at a comparable step, i.e. every seed but 0.
+# Used for the robustness check that answers "is the story an artifact of the
+# one long run?" -- C(8,4) = 70 splits, so the p-value floor is 0.029.
+MATCHED_SEEDS = tuple(s for s in SEEDS if s != 0)
 
 # Panels of the figure, in reading order: embeddings, then logits and
 # attention, then the two symmetry defects. ``log`` for the defects, which span
@@ -152,7 +179,8 @@ def generate(force: bool = False) -> list[dict]:
         return {"run": name, "seed": int(cfg["seed"]), "which": which,
                 **measure_checkpoint(model, int(cfg["p"]),
                                      float(cfg["train_frac"]),
-                                     int(cfg["seed"]))}
+                                     int(cfg["seed"])),
+                **{k: float(summary[k]) for k in STEPS}}
 
     rows = fill_table(keys(), measure, RUNS / f"{NAME}.csv", COLUMNS,
                       key="key", force=force)
@@ -267,7 +295,9 @@ def table(rows: list[dict]) -> None:
 def seed_zero_summary(rows: list[dict]) -> tuple[int, int]:
     """(read-outs where seed 0 is the most flattering seed, total).
 
-    The headline of this experiment, computed rather than eyeballed.
+    Computed rather than eyeballed -- but see :func:`seed_zero_outside`, which
+    is the version worth quoting: being the extreme of five is a much weaker
+    statement than being outside the other four's whole range.
     """
     best = 0
     for field, _, direction in READOUTS:
@@ -278,6 +308,48 @@ def seed_zero_summary(rows: list[dict]) -> tuple[int, int]:
         extreme = max(finite) if direction > 0 else min(finite)
         best += fin[0] == extreme
     return best, len(READOUTS)
+
+
+def seed_zero_outside(rows: list[dict]) -> list[str]:
+    """Read-outs where seed 0 lies outside the other four's entire range.
+
+    Every one of these is in the flattering direction, and the explanation is
+    probably not the seed: seed 0's run is 11,100 steps against 1,800-2,100
+    for the others, and Sec. 5 already measured the circuit *continuing to
+    sparsify* after the accuracy jump (top-5 share 40% -> 57% over 3k extra
+    steps). One long run cannot separate "lucky seed" from "trained longer",
+    which is why the matched-length check below exists.
+    """
+    out = []
+    for field, _, direction in READOUTS:
+        fin = arm(rows, "final", field)
+        others = [v for s, v in zip(SEEDS, fin) if s != 0 and not np.isnan(v)]
+        if np.isnan(fin[0]) or not others:
+            continue
+        if (fin[0] > max(others)) if direction > 0 else (fin[0] < min(others)):
+            out.append(field)
+    return out
+
+
+def matched_length_check(rows: list[dict]) -> list[tuple[str, float, bool]]:
+    """The same tests with seed 0 dropped: does the long run carry the story?
+
+    Four seeds per arm gives C(8,4) = 70 splits and a p-value floor of 0.029,
+    so a complete separation is still detectable -- which is the only reason
+    this check is worth running rather than merely noting the confound.
+    """
+    out = []
+    for field, _, _ in READOUTS:
+        mem = [v for s, v in zip(SEEDS, arm(rows, "memorize", field))
+               if s in MATCHED_SEEDS and not np.isnan(v)]
+        fin = [v for s, v in zip(SEEDS, arm(rows, "final", field))
+               if s in MATCHED_SEEDS and not np.isnan(v)]
+        if not mem:                    # never reached at memorization
+            out.append((field, float("nan"), bool(fin)))
+            continue
+        r = rank_sum_test(mem, fin)
+        out.append((field, r["p_two_sided"], r["superiority"] in (0.0, 1.0)))
+    return out
 
 
 # -- figure ------------------------------------------------------------------
@@ -297,10 +369,10 @@ def figure(rows: list[dict] | None = None) -> None:
         for j, (vals, colour) in enumerate(((mem, "C3"), (fin, "C0"))):
             x = np.full(len(vals), j) + np.linspace(-0.13, 0.13, len(vals))
             ax.scatter(x[1:], vals[1:], s=26, color=colour, zorder=3,
-                       label="seeds 1-4" if j == 1 else None)
+                       label="seeds 1-4 (~2k steps)" if j == 1 else None)
             ax.scatter(x[:1], vals[:1], s=64, marker="*", color=colour,
                        edgecolors="k", linewidths=0.5, zorder=4,
-                       label="seed 0 (published)" if j == 1 else None)
+                       label="seed 0 (published, 11.1k steps)" if j == 1 else None)
             ax.hlines(np.mean(vals), j - 0.22, j + 0.22, color=colour, lw=1.4)
         r = rank_sum_test(mem, fin)
         ax.set_xticks([0, 1], ["memorize", "final"])
@@ -325,8 +397,9 @@ def figure(rows: list[dict] | None = None) -> None:
     ax.set_title("Restricted accuracy\n(thick = seed 0)", fontsize=8.5, loc="left")
     ax.legend(fontsize=7, loc="lower right")
 
-    fig.suptitle("Every mechanistic read-out across five seeds: the story holds, "
-                 "the published numbers are the flattering end", y=1.02)
+    fig.suptitle("Every mechanistic read-out at five seeds: 12 of 13 separate "
+                 "completely, and the published run sits at the flattering end",
+                 y=1.02)
     fig.savefig(FIGS / "mechanistic_seeds.png", bbox_inches="tight")
     print("saved figures/mechanistic_seeds.png")
 
@@ -334,9 +407,26 @@ def figure(rows: list[dict] | None = None) -> None:
 def figure_and_table(rows: list[dict] | None = None) -> None:
     rows = rows if rows is not None else load_readouts()
     table(rows)
+
     best, total = seed_zero_summary(rows)
+    outside = seed_zero_outside(rows)
     print(f"\nseed 0 is the most flattering of the five seeds on {best} of "
-          f"{total} read-outs at the final checkpoint.")
+          f"{total} read-outs, and lies outside the other four's whole range "
+          f"on {len(outside)}:")
+    print(f"  {', '.join(outside)}")
+    steps = {int(r['seed']): int(r['steps_run']) for r in rows
+             if r['which'] == 'final'}
+    print(f"  but the runs are not the same length: steps_run = {steps}, so "
+          f"seed 0's final checkpoint had {steps[0] - max(v for k, v in steps.items() if k):,}"
+          f" more steps of decay after grokking than any other seed.")
+
+    checks = matched_length_check(rows)
+    n_complete = sum(1 for _, _, c in checks if c)
+    print(f"\nsame tests without seed 0 (4 vs 4, floor p = 0.029): "
+          f"{n_complete} of {len(checks)} still separate completely")
+    for field, p, complete in checks:
+        if not complete:
+            print(f"  {field}: p = {p:.3f} -- does not separate without seed 0")
     figure(rows)
 
 
