@@ -19,6 +19,10 @@ Points are coloured by the residue class r = (k n) mod p, which is exactly the
 token's angular position around the ring (gcd(k, p) = 1, so n -> k n mod p is a
 bijection) -- the colour then winds smoothly around the circle. Both checkpoints
 load through grokking.checkpoints; no retraining.
+
+The projection statistics live in ``grokking.mechanistic``, shared with the
+seed sweep of Sec. 12.
+
 Run:  python experiments/embedding_circle.py
 """
 
@@ -31,6 +35,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from grokking.checkpoints import load_model
+from grokking.mechanistic import dominant_frequency, frequency_projection
 
 from _style import apply_style  # noqa: E402
 
@@ -38,33 +43,6 @@ apply_style()
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = "p97_frac0.30_wd1_seed0"
-
-
-def dominant_frequency(E, p):
-    """Frequency (excluding DC) carrying the most embedding energy."""
-    F = np.fft.rfft(E - E.mean(0, keepdims=True), axis=0)
-    power = (F.real**2 + F.imag**2).sum(axis=1)
-    return int(power[1:].argmax()) + 1
-
-
-def frequency_projection(E, k, p):
-    """Project centered embeddings onto the frequency-k (cos, sin) plane.
-
-    Returns (x, y) scores, the fraction of total embedding variance captured by
-    the plane, and the radial coefficient of variation (0 = perfect circle).
-    """
-    n = np.arange(p)
-    c = np.cos(2 * np.pi * k * n / p)
-    s = np.sin(2 * np.pi * k * n / p)
-    Ec = E - E.mean(axis=0, keepdims=True)
-    u = c @ Ec
-    v = s @ Ec
-    u /= np.linalg.norm(u)
-    v /= np.linalg.norm(v)
-    x, y = Ec @ u, Ec @ v
-    var_frac = float((x @ x + y @ y) / (Ec * Ec).sum())
-    r = np.sqrt(x**2 + y**2)
-    return x, y, var_frac, float(r.std() / r.mean())
 
 
 def main():

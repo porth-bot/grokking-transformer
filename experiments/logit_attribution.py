@@ -27,7 +27,10 @@ rebuild 100% test accuracy; the memorization checkpoint is diffuse (~12% on the
 diagonal). And projecting the *memorization* logits onto the clean ``a + b``
 subspace already recovers far more test accuracy than the raw model expresses --
 the generalizing circuit is forming under the memorization, before the test-acc
-jump. ``tests/test_logit_attribution.py`` pins these against the checkpoints.
+jump. ``tests/test_logit_attribution.py`` pins these against the checkpoints, and
+``experiments/mechanistic_seeds.py`` re-measures them across five seeds --
+which is why the analysis lives in ``grokking.mechanistic`` and this script
+only draws.
 
 Run:  python experiments/logit_attribution.py   (after run_sweep.py)
 """
@@ -38,74 +41,19 @@ import torch
 from pathlib import Path
 
 from grokking.checkpoints import load_model
-from grokking.data import modular_addition_dataset, train_test_split
+from grokking.mechanistic import (
+    diagonal_frequency_energy,
+    logit_tensor,
+    restrict_to_freqs,
+    test_accuracy,
+)
 
 # matplotlib is imported lazily inside _figure() (it is an experiments/dev dep,
-# absent from the numpy+torch CI job) so that tests can reuse the analysis
-# helpers below without pulling in a plotting dependency.
+# absent from the numpy+torch CI job) so that a test can call main()'s analysis
+# path without pulling in a plotting dependency.
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = "p97_frac0.30_wd1_seed0"
-
-
-def logit_tensor(model, p):
-    """Logits at the "=" position for every ordered pair, shaped ``[a, b, c]``.
-
-    The dataset is all ``p^2`` pairs in row-major (a outer, b inner) order, so a
-    reshape to ``(p, p, p)`` indexes cleanly as ``L[a, b, c]``.
-    """
-    tokens, targets = modular_addition_dataset(p)
-    with torch.no_grad():
-        logits = model(tokens)[:, -1, :]        # (p^2, p)
-    return logits.reshape(p, p, p), tokens, targets
-
-
-def diagonal_frequency_energy(L, p):
-    """Per-frequency energy of the logits on the ``k_a = k_b`` (a+b) diagonal.
-
-    Returns ``(diag, diag_fraction)`` where ``diag[k]`` is the squared-magnitude
-    energy of the 2D DFT of the (input-mean-removed) logits at ``(k, k)`` plus
-    its conjugate partner ``(p-k, p-k)``, summed over the answer axis, for
-    ``k = 0 .. (p-1)/2``; ``diag_fraction`` is the share of all non-DC logit
-    energy that lives on this diagonal (i.e. is explained by ``a + b``).
-    """
-    Lc = L - L.mean(dim=(0, 1), keepdim=True)   # drop the constant-in-(a,b) part
-    F = torch.fft.fft2(Lc, dim=(0, 1))          # (p, p, p) complex
-    E = F.abs().pow(2)
-    K = (p - 1) // 2
-    diag = torch.zeros(K + 1)
-    for k in range(1, K + 1):
-        diag[k] = E[k, k, :].sum() + E[p - k, p - k, :].sum()
-    non_dc_total = E.sum() - E[0, 0, :].sum()
-    diag_fraction = float(diag[1:].sum() / non_dc_total)
-    return diag, diag_fraction
-
-
-def restrict_to_freqs(L, p, keep_ks):
-    """Rebuild the logits keeping only the a+b structure at ``keep_ks``.
-
-    Keeps the input-mean (the constant-in-(a,b) part) plus, for each ``k`` in
-    ``keep_ks``, the diagonal modes ``(k, k)`` and ``(p-k, p-k)``; every other
-    2D-DFT coefficient is zeroed before the inverse transform. The result is the
-    logits as they would be if the model computed *only* those frequencies of
-    ``a + b`` -- the restricted-accuracy control.
-    """
-    mean = L.mean(dim=(0, 1), keepdim=True)
-    F = torch.fft.fft2(L - mean, dim=(0, 1))
-    mask = torch.zeros(p, p, dtype=torch.bool)
-    for k in keep_ks:
-        mask[k, k] = True
-        mask[p - k, p - k] = True
-    Fm = F * mask[:, :, None]
-    return torch.fft.ifft2(Fm, dim=(0, 1)).real + mean
-
-
-def test_accuracy(L, tokens, targets, train_frac, seed):
-    """Test-split accuracy of an argmax read-out of a logit tensor ``L``."""
-    (_, _), (te_tok, te_tgt) = train_test_split(tokens, targets, train_frac, seed)
-    a, b = te_tok[:, 0], te_tok[:, 1]
-    pred = L[a, b, :].argmax(dim=-1)
-    return float((pred == te_tgt).float().mean())
 
 
 def main():

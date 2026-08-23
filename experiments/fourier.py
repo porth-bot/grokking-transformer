@@ -17,10 +17,13 @@ is merely memorizing. This script tests that prediction by comparing the
 checkpoint saved at the memorization point against the final checkpoint of
 the same run.
 
+The statistics themselves live in ``grokking.mechanistic`` (this figure and
+the seed sweep of Sec. 12 must measure the same thing, so they call the same
+function); this script is the figure.
+
 Run:  python experiments/fourier.py   (after run_sweep.py)
 """
 
-import torch
 import matplotlib
 
 matplotlib.use("Agg")
@@ -29,6 +32,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 from pathlib import Path
 
 from grokking.checkpoints import load_model
+from grokking.mechanistic import embedding_spectrum, top_k_energy_fraction
 
 from _style import apply_style  # noqa: E402
 
@@ -36,28 +40,6 @@ apply_style()
 
 ROOT = Path(__file__).resolve().parent.parent
 MAIN = "p97_frac0.30_wd1_seed0"
-
-
-def embedding_spectrum(model, p):
-    """Per-frequency L2 norm of the digit embeddings.
-
-    E is (p, d_model) -- the '=' token row is excluded, since only digit
-    tokens participate in the periodic structure. rfft along the token axis
-    gives coefficients for frequencies k = 0 .. (p-1)/2; we report
-    ||F_k||_2 over the model dimension, and the DC term k=0 (the mean
-    embedding) is dropped from sparsity statistics.
-    """
-    E = model.tok_emb.weight.detach()[:p]          # (p, d_model)
-    F = torch.fft.rfft(E, dim=0)                   # (p//2 + 1, d_model), complex
-    return F.abs().pow(2).sum(dim=1).sqrt()        # (p//2 + 1,)
-
-
-def top_k_energy_fraction(spec, k=5):
-    """Fraction of squared spectral norm captured by the top-k frequencies
-    (excluding DC)."""
-    energy = spec[1:].pow(2)
-    top = energy.sort(descending=True).values[:k].sum()
-    return float(top / energy.sum())
 
 
 def main():
