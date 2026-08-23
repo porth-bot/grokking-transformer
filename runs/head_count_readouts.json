@@ -1,0 +1,19 @@
+{
+  "p": 97,
+  "train_frac": 0.3,
+  "weight_decay": 1.0,
+  "heads": [
+    1,
+    2,
+    4
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "which": "final",
+  "n_runs": 15
+}

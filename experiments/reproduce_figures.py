@@ -8,7 +8,7 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
     CSV logs      -> lr_sweep                                        (lr_sweep.py)
     CSV logs      -> dropout_control                          (dropout_control.py)
     CSV logs      -> wd_scope                                        (wd_scope.py)
-    CSV logs      -> head_count                                    (head_count.py)
+    CSV logs (+ read-out CSV) -> head_count                        (head_count.py)
     CSV logs      -> progress_measures                      (progress_measures.py)
     CSV logs      -> attention_entropy                      (attention_entropy.py)
     CSV logs      -> operations                                    (operations.py)
@@ -83,8 +83,11 @@ CSV_RUNS = [
     for f, w, s in run_sweep.jobs()
 ] + [
     "p97_frac0.30_wd0_seed0_do0.1",
-    "p97_frac0.30_wd1_seed0_h1",   # head-count ablation (§9); 4-head reuses main
-    "p97_frac0.30_wd1_seed0_h2",
+] + [
+    # head-count ablation (§9): 1/2/4 heads x five seeds. The 4-head arm is the
+    # main sweep runs already listed above; asking head_count for the names
+    # keeps this list from drifting when the seed list changes.
+    name for names in head_count.run_names().values() for name in names
 ] + [
     # weight-decay scope ablation (§7): embeddings-only and non-embeddings-only;
     # the all-parameters arm is the main run already listed above.
@@ -100,15 +103,17 @@ CSV_RUNS = [
 CKPT_RUNS = [(fourier.MAIN, ["", "_memorize"])]
 # The lr-sensitivity sweep logs live in runs_lr/ (CSV/JSON only).
 LR_RUNS = [lr_sweep.cfg_for(lr).run_name() for lr in lr_sweep.LRS]
-# Three read-outs are single committed CSVs (+ JSON meta) rather than sweeps.
+# Four read-outs are single committed CSVs (+ JSON meta) rather than sweeps.
 # Two are trajectories from rerunning the main config with its own
 # instrumentation -- the progress measures (§10) and the attention read-out
 # (appendix). The third is the swap-equivariance table (§11): one row per
 # checkpoint of the operations sweep, committed because those checkpoints are
 # not (.gitignore keeps .pt files out) and 3 KB of read-outs reproduces the
-# figure where 12 MB of weights would be needed to recompute them.
+# figure where 12 MB of weights would be needed to recompute them. The fourth
+# is the head-count read-out table (§9), committed for the same reason: 15
+# runs' attention statistics, from 15 checkpoints that are not in the repo.
 TRAJECTORY_CSVS = [progress_measures.NAME, attention_entropy.NAME,
-                   swap_equivariance.NAME]
+                   swap_equivariance.NAME, head_count.NAME]
 
 
 def check_artifacts():
@@ -149,9 +154,7 @@ def main():
     plots.frac_sweep_figure()
     lr_sweep.figure_and_table()  # from committed runs_lr/ CSVs, no retraining
     dropout_control.figure_and_table("p97_frac0.30_wd0_seed0_do0.1")
-    head_count.figure_and_table({1: "p97_frac0.30_wd1_seed0_h1",
-                                 2: "p97_frac0.30_wd1_seed0_h2",
-                                 4: "p97_frac0.30_wd1_seed0"})
+    head_count.figure_and_table()  # §9, from the 15 run logs + the read-out CSV
     wd_scope.figure_and_table(*(wd_scope.cfg_for(s).run_name()
                                 for s in wd_scope.SCOPES))  # §7
     progress_measures.figure()  # §10, from the committed progress trajectory CSV
