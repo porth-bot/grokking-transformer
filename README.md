@@ -772,7 +772,7 @@ Every figure, from a clean clone, without training anything:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-./reproduce.sh                      # tests, mypy, all 14 figures: ~25 s
+./reproduce.sh                      # tests, mypy, all 17 figures: ~35 s
 ```
 
 `requirements.txt` pins the exact versions the committed runs were produced
@@ -788,7 +788,7 @@ the training costs are the wall-clock the committed run logs actually recorded
 (`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 134 tests
+pytest                              # 176 tests
 python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
 python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
 python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)
@@ -800,6 +800,7 @@ python experiments/head_count.py --train # §9 1 vs 2 vs 4 heads x 5 seeds (8 ru
 python experiments/head_count.py --generate  # §9 re-measure the attention read-out CSV from those checkpoints
 python experiments/progress_measures.py  # §10 trajectory of progress measures (reruns the main config, ~6 min CPU)
 python experiments/operations.py         # §11 subtraction/multiplication vs addition (12 runs, 55 min; addition reuses the sweep CSVs)
+python experiments/mechanistic_seeds.py --generate  # §12 re-measure all 13 read-outs on the main config's 10 checkpoints (no training; needs run_sweep.py's .pt files)
 python experiments/embedding_circle.py   # appendix: embedding ring (checkpoints only)
 python experiments/attention_pattern.py  # appendix: attention symmetry (checkpoints only)
 python experiments/attention_entropy.py  # appendix: attention entropy trajectory (reruns the main config, ~3 min CPU)
@@ -809,6 +810,9 @@ python experiments/reproduce_figures.py  # every figure from committed logs, no 
 
 The four checkpoint-only scripts and `plots.py` need no GPU and no training at
 all — they are the replay path, and `reproduce_figures.py` runs all of them.
+`mechanistic_seeds.py` joins them for its *figure* (which replays from the
+committed read-out CSV) but not for `--generate`, which needs the four
+gitignored checkpoints that only `run_sweep.py` produces.
 
 Committed CSV logs mean the figures are reproducible without retraining. Model
 checkpoints are gitignored *except* the two from the main run
