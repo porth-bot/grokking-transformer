@@ -267,10 +267,12 @@ def test_the_committed_csv_still_matches_a_live_measurement(rows):
 def test_the_cancellation_that_sets_that_tolerance_is_real():
     """The justification for LIVE_RTOL, measured rather than asserted.
 
-    If a later change makes the grokked attention *less* symmetric, this
-    cancellation shrinks and the tolerance becomes lazy rather than necessary;
-    this fails then, which is the point of pinning the reason and not just the
-    number.
+    Two directions, and both matter. The arithmetic floor must sit *below*
+    LIVE_RTOL, or the check fails on any machine but this one (which is how it
+    reached CI). And LIVE_RTOL must not sit far above the floor, or it has
+    stopped being a staleness check -- so if a later change makes the grokked
+    attention less symmetric, the cancellation shrinks and this fails, rather
+    than the tolerance quietly becoming lazy.
     """
     from grokking.attention import eq_attention
     from grokking.checkpoints import load_model
@@ -281,8 +283,10 @@ def test_the_cancellation_that_sets_that_tolerance_is_real():
     row = eq_attention(model, tokens)
     a, b = row[:, 0], row[:, 1]
     cancellation = float(np.abs(a).mean() / np.abs(a - b).mean())
+    floor = cancellation * float(np.finfo(np.float32).eps)
     assert cancellation > 1_000
-    assert cancellation * float(np.finfo(np.float32).eps) > LIVE_RTOL
+    assert floor == pytest.approx(7.9e-4, rel=0.1)
+    assert floor < LIVE_RTOL < 10 * floor
 
 
 def test_the_table_and_the_figure_measure_the_ring_in_different_planes(rows):
