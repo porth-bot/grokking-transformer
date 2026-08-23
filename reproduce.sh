@@ -2,7 +2,7 @@
 #
 # Regenerate every figure in figures/ from the committed logs and checkpoints.
 #
-#     ./reproduce.sh              # tests, mypy, then all 14 figures: ~1 min
+#     ./reproduce.sh              # tests, mypy, then all 16 figures: ~25 s
 #     PYTHON=/path/to/python ./reproduce.sh
 #
 # NO TRAINING happens here, and that is the point. The sweeps behind these
@@ -60,7 +60,7 @@ step() {  # step <label> <script> [args...]
 # failure here is exactly the failure this script exists to prevent.
 step "test suite" -m pytest -q
 step "static type check (mypy, grokking/)" -m mypy
-step "regenerate all 14 figures from committed artifacts" experiments/reproduce_figures.py
+step "regenerate all 16 figures from committed artifacts" experiments/reproduce_figures.py
 
 echo
 echo "=================================================================="
