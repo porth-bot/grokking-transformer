@@ -9,6 +9,7 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
     CSV logs      -> dropout_control                          (dropout_control.py)
     CSV logs      -> wd_scope                                        (wd_scope.py)
     CSV logs (+ read-out CSV) -> head_count                        (head_count.py)
+    read-out CSV  -> mechanistic_seeds                    (mechanistic_seeds.py)
     CSV logs      -> progress_measures                      (progress_measures.py)
     CSV logs      -> attention_entropy                      (attention_entropy.py)
     CSV logs      -> operations                                    (operations.py)
@@ -39,6 +40,7 @@ import head_count
 import fourier
 import logit_attribution
 import lr_sweep
+import mechanistic_seeds
 import operations
 import plots
 import progress_measures
@@ -64,6 +66,7 @@ FIGURES = (
     "dropout_control.png",     # dropout_control.figure_and_table
     "wd_scope.png",            # wd_scope.figure_and_table
     "head_count.png",          # head_count.figure_and_table
+    "mechanistic_seeds.png",   # mechanistic_seeds.figure
     "progress_measures.png",   # progress_measures.figure
     "attention_entropy.png",   # attention_entropy.figure
     "operations.png",          # operations.figure_and_table
@@ -112,8 +115,11 @@ LR_RUNS = [lr_sweep.cfg_for(lr).run_name() for lr in lr_sweep.LRS]
 # figure where 12 MB of weights would be needed to recompute them. The fourth
 # is the head-count read-out table (§9), committed for the same reason: 15
 # runs' attention statistics, from 15 checkpoints that are not in the repo.
+# The fifth is the mechanistic seed sweep (Sec. 12): every read-out of ten
+# checkpoints, nine of which are not in the repo either.
 TRAJECTORY_CSVS = [progress_measures.NAME, attention_entropy.NAME,
-                   swap_equivariance.NAME, head_count.NAME]
+                   swap_equivariance.NAME, head_count.NAME,
+                   mechanistic_seeds.NAME]
 
 
 def check_artifacts():
@@ -155,6 +161,7 @@ def main():
     lr_sweep.figure_and_table()  # from committed runs_lr/ CSVs, no retraining
     dropout_control.figure_and_table("p97_frac0.30_wd0_seed0_do0.1")
     head_count.figure_and_table()  # §9, from the 15 run logs + the read-out CSV
+    mechanistic_seeds.figure()  # §12, from the committed read-out CSV
     wd_scope.figure_and_table(*(wd_scope.cfg_for(s).run_name()
                                 for s in wd_scope.SCOPES))  # §7
     progress_measures.figure()  # §10, from the committed progress trajectory CSV

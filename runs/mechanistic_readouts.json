@@ -1,0 +1,28 @@
+{
+  "p": 97,
+  "train_frac": 0.3,
+  "weight_decay": 1.0,
+  "max_steps": 25000,
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "checkpoints": [
+    "memorize",
+    "final"
+  ],
+  "n_rows": 10,
+  "restrict_ms": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10
+  ]
+}
