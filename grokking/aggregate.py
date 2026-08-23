@@ -94,3 +94,125 @@ def fmt_median_range(
     if len(reached) < n:
         body += f" ({len(reached)}/{n} seeds)"
     return body
+
+
+def stats(values: Sequence[float]) -> dict[str, float]:
+    """``mean``/``sd``/``min``/``max``/``n`` of a per-seed scalar read-out.
+
+    ``sd`` is the sample standard deviation (ddof=1), which is undefined for a
+    single seed and reported as ``nan`` rather than 0.0 -- a lone run has no
+    measured spread, and printing 0.0 would claim it has none.
+    """
+    arr = np.asarray(list(values), dtype=float)
+    if arr.size == 0:
+        raise ValueError("no values")
+    return {
+        "mean": float(arr.mean()),
+        "sd": float(arr.std(ddof=1)) if arr.size > 1 else float("nan"),
+        "min": float(arr.min()),
+        "max": float(arr.max()),
+        "n": float(arr.size),
+    }
+
+
+def fmt_mean_range(values: Sequence[float], fmt: str = "{:.3f}") -> str:
+    """``mean [min–max]`` for a continuous read-out (issue #4's format).
+
+    Distinct from :func:`fmt_median_range`, which is for grok *steps*: those
+    are counts on a 100-step eval grid where the median is the robust summary
+    and thousands separators help. A read-out like an entropy or an energy
+    fraction wants its mean and the raw extent of the seeds.
+    """
+    arr = np.asarray(list(values), dtype=float)
+    if arr.size == 1:
+        return fmt.format(float(arr[0]))
+    return (f"{fmt.format(float(arr.mean()))} "
+            f"[{fmt.format(float(arr.min()))}–{fmt.format(float(arr.max()))}]")
+
+
+def spread_ratio(values: Sequence[float]) -> float:
+    """``max/min`` -- how many times the worst seed is the best seed.
+
+    The slate's usual way of saying "is this effect bigger than the seed
+    noise": an effect is only readable if the gap between arms exceeds the
+    spread within them. Returns ``inf`` if the minimum is 0 and the maximum is
+    not (an unbounded ratio, which is the honest answer), and ``nan`` if the
+    values straddle zero, where a ratio means nothing.
+    """
+    arr = np.asarray(list(values), dtype=float)
+    lo, hi = float(arr.min()), float(arr.max())
+    if lo <= 0.0 <= hi and not (lo == 0.0 and hi == 0.0):
+        return float("inf") if lo == 0.0 else float("nan")
+    if lo == 0.0 and hi == 0.0:
+        return 1.0
+    return hi / lo
+
+
+def rank_sum_test(
+    a: Sequence[float], b: Sequence[float], max_splits: int = 200_000
+) -> dict[str, float]:
+    """Exact two-sample permutation test on the Mann-Whitney statistic.
+
+    Five seeds per arm is far too few for a normal approximation and the
+    read-outs here are not Gaussian (grok steps are counts on a 100-step grid,
+    with ties), so the p-value is enumerated rather than approximated.
+
+    The statistic is ``U_a = #{a_i > b_j} + 0.5 #{a_i == b_j}``, counted over
+    all ``n*m`` pairs; ``U_a / (n*m)`` is the probability that a randomly drawn
+    ``a`` exceeds a randomly drawn ``b`` (ties split), reported as
+    ``superiority``. Under the null hypothesis that the two arms are draws from
+    one distribution, the labels are exchangeable: every way of calling ``n`` of
+    the ``n+m`` pooled values "a" is equally likely. So the exact null
+    distribution of ``U`` is obtained by walking all ``C(n+m, n)`` splits, and
+
+        p_greater = P(U >= U_obs),   p_less = P(U <= U_obs)
+
+    each counting the observed split itself, which is why no p-value here can
+    fall below ``1 / C(n+m, n)`` (1/252 for 5 vs 5). The two-sided p-value is
+    ``min(1, 2 min(p_less, p_greater))``. Enumerating the *values* rather than
+    their ranks makes ties exact for free: a tied pair contributes 0.5 in every
+    split it appears in, with no midrank correction to get wrong.
+
+    Returns ``u``, ``superiority``, ``p_less``, ``p_greater``, ``p_two_sided``,
+    and ``min_p`` -- the resolution floor ``1 / C(n+m, n)``, so a caller can
+    tell "not significant" from "cannot be significant at this sample size".
+    """
+    from itertools import combinations
+    from math import comb
+
+    x = np.asarray(list(a), dtype=float)
+    y = np.asarray(list(b), dtype=float)
+    n, m = x.size, y.size
+    if n == 0 or m == 0:
+        raise ValueError("both arms need at least one value")
+    n_splits = comb(n + m, n)
+    if n_splits > max_splits:
+        raise ValueError(
+            f"C({n + m}, {n}) = {n_splits} splits exceeds max_splits="
+            f"{max_splits}; this routine is exact-only by design"
+        )
+
+    def u_of(first: np.ndarray, second: np.ndarray) -> float:
+        d = first[:, None] - second[None, :]
+        return float((d > 0).sum() + 0.5 * (d == 0).sum())
+
+    u_obs = u_of(x, y)
+    pooled = np.concatenate([x, y])
+    idx = np.arange(n + m)
+    ge = le = 0
+    for pick in combinations(idx, n):
+        mask = np.zeros(n + m, dtype=bool)
+        mask[list(pick)] = True
+        u = u_of(pooled[mask], pooled[~mask])
+        ge += u >= u_obs
+        le += u <= u_obs
+    p_greater = ge / n_splits
+    p_less = le / n_splits
+    return {
+        "u": u_obs,
+        "superiority": u_obs / (n * m),
+        "p_less": p_less,
+        "p_greater": p_greater,
+        "p_two_sided": min(1.0, 2.0 * min(p_less, p_greater)),
+        "min_p": 1.0 / n_splits,
+    }
