@@ -260,34 +260,75 @@ memorizing model expresses (0.16): the generalizing circuit is already forming,
 drowned out by per-pair memorization, *before* the test-accuracy jump — the
 same "gradual then sudden" story the progress measures will make quantitative.
 
-### 9. Does grokking need multiple heads? (No — one wide head groks fastest)
+### 9. Does grokking need multiple heads? (No — and one wide head groks ~4× sooner, over five seeds)
 
 The main runs use 4 heads. But modular addition has a single known mechanism —
 embed each input on a circle, add the angles, read off the sum by interference
 (§8) — and nothing in it obviously needs the representation split across heads.
-Holding the main config fixed (frac 0.30, wd 1.0, seed 0) and varying only
-`n_heads` with `d_model` pinned at 128 (so head width tracks the count):
+Holding the main config fixed (frac 0.30, wd 1.0, lr $10^{-3}$) and varying only
+`n_heads`, with `d_model` pinned at 128 so head width tracks the count and the
+**parameter count is identical (223,360) in all three arms** — five seeds each,
+the same five §1 uses:
 
-| `n_heads` | `d_head` | memorize | grok | final test |
-|---|---|---|---|---|
-| 1 | 128 | 100 | **400** | 1.000 |
-| 2 | 64 | 100 | 900 | 1.000 |
-| 4 | 32 | 100 | 1900 | 1.000 |
+| `n_heads` | `d_head` | grokked | memorize | grok step, median [min–max] | seed spread | final test |
+|---|---|---|---|---|---|---|
+| 1 | 128 | 5/5 | 100 | **300** [300–400] | 1.3× | 1.000 |
+| 2 | 64 | 5/5 | 100 | 700 [700–900] | 1.3× | 1.000 |
+| 4 | 32 | 5/5 | 100 | 1,300 [1,200–1,900] | 1.6× | 1.000 |
 
 ![head count](figures/head_count.png)
 
-All three grok to 100% — so grokking on this task does **not** require multiple
-heads; a single head is enough. And at seed 0 the grok delay *increases*
-monotonically with head count: the single wide head (`d_head` 128) forms the
-circuit fastest, and splitting the same 128 dimensions into more, narrower heads
-slows the transition roughly 2× per doubling. The likely reason is that the
-one-head circuit lives in a single attention pattern, while more heads must
-coordinate the same computation across a partitioned residual stream. **Caveat**:
-this is one seed, and the grok time has real seed spread (the 4-head main run is
-1300 [1200–1900] over five seeds, §1); the ~5× span here exceeds that band so the
-ordering is likely genuine, but a full multi-seed sweep — not run here — is what
-would nail it. Reuses the committed 4-head main run; only the 1-/2-head runs are
-computed ([`head_count.py`](experiments/head_count.py)).
+All three grok to 100%, so grokking on this task does **not** require multiple
+heads; a single head is enough. And the ordering — fewer heads grok sooner —
+**survives seed-averaging with complete separation**: no seed of a smaller-head
+arm is slower than any seed of a larger one, in all three pairwise comparisons.
+The exact rank-sum permutation test over all $\binom{10}{5} = 252$ relabelings
+([`grokking/aggregate.py`](grokking/aggregate.py)) puts every pair at
+$p = 0.008$, which is the **floor** at five vs five: complete separation is
+exactly what it takes to reach it, and nothing at this sample size can do
+better. Why it separates is legible in the table — the within-arm seed spread
+(1.3–1.6×) is smaller than the step between arms (2.3× and 1.9× on medians).
+
+**What changed from the single-seed version, and what did not.** This section
+used to report seed 0 alone: 400 / 900 / 1900. Those turn out to be the
+*maximum* of each arm — seed 0 is the slowest seed at every head count — so the
+shipped numbers were uniformly the pessimistic end, while the ratios between
+them (2.25×, 2.11×) survived averaging nearly unchanged (2.33×, 1.86×). The old
+caveat ("the ~5× span exceeds the 4-head arm's own 1200–1900 band, so the
+ordering is likely genuine, but a full multi-seed sweep is what would nail it")
+called it correctly. That is the good case, and it is still worth having run:
+the caveat could not know, and §11 is this repo's example of a single-seed
+ordering that did *not* survive averaging (seed 0 had multiplication grokking
+nearly 2× sooner than addition; three seeds dissolved the gap).
+
+**The mechanistic guess it came with is not supported.** The old text explained
+the ordering by saying the one-head circuit lives in a single attention pattern
+while more heads "must coordinate the same computation across a partitioned
+residual stream". Measuring the appendix's attention read-outs on all 15 final
+checkpoints says the arms end up in the same place:
+
+| `n_heads` | entropy (nats) | operand entropy | operand fraction | asymmetry |
+|---|---|---|---|---|
+| 1 | 0.810 [0.778–0.875] | 0.6931 | 0.968 [0.942–0.980] | 0.0037 [0.0013–0.0072] |
+| 2 | 0.882 [0.796–1.064] | 0.6931 | 0.922 [0.778–0.974] | 0.0076 [0.0025–0.0152] |
+| 4 | 0.912 [0.819–1.030] | 0.6931 | 0.909 [0.831–0.966] | 0.0040 [0.0001–0.0133] |
+
+Every arm reaches operand entropy $\ln 2 = 0.6931$ to four decimals — the
+algorithmic symmetry the appendix identifies — and **none of the four read-outs
+separates any pair of arms** under the same test that separates every pair on
+grok step (smallest $p$ over the 12 comparisons: 0.056). So the head count
+changes how long the circuit takes to form, not what it converges to, and
+whatever slows the four-head runs down is not visible in the endpoint
+attention. One caveat about the statistic rather than the result: it is a mean
+over heads, so the 4-head number averages four values where the 1-head number
+is one — the means are comparable, the dispersions are not.
+
+Reuses the committed 4-head main runs (five of the 15 runs); only the 1- and
+2-head runs are trained here ([`head_count.py`](experiments/head_count.py)).
+The attention read-outs ship as a small committed CSV because the checkpoints
+they come from do not, the same split §11's control uses — and a test
+re-measures the one run whose weights *are* committed, so the cache cannot
+outlive them silently.
 
 ### 10. The circuit forms *gradually*, before the jump (progress measures)
 
@@ -563,7 +604,7 @@ the training costs are the wall-clock the committed run logs actually recorded
 (`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 79 tests
+pytest                              # 134 tests
 python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
 python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
 python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)
@@ -571,7 +612,8 @@ python experiments/fourier.py          # §5 Fourier spectrum (checkpoints only,
 python experiments/dropout_control.py  # §6 regularizer control (1 run, 3.7 min)
 python experiments/wd_scope.py         # §7 weight-decay scope ablation (2 runs, 7.2 min; reuses the main baseline)
 python experiments/logit_attribution.py  # §8 per-frequency logit attribution (checkpoints only)
-python experiments/head_count.py         # §9 1 vs 2 vs 4 heads (2 runs, 1 min; 4 heads is the main run)
+python experiments/head_count.py --train # §9 1 vs 2 vs 4 heads x 5 seeds (8 runs, 8.8 min; the 4-head arm is the main sweep)
+python experiments/head_count.py --generate  # §9 re-measure the attention read-out CSV from those checkpoints
 python experiments/progress_measures.py  # §10 trajectory of progress measures (reruns the main config, ~6 min CPU)
 python experiments/operations.py         # §11 subtraction/multiplication vs addition (12 runs, 55 min; addition reuses the sweep CSVs)
 python experiments/embedding_circle.py   # appendix: embedding ring (checkpoints only)
@@ -598,9 +640,13 @@ replay path and that every artifact the replay reads is committed.
   min–max ranges over 5 seeds (§1–2), enough to show the between-cell gaps
   survive seed noise but too few to trust the range as a real spread — treat
   it as a rough error bar, not a confidence interval. The *mechanistic*
-  read-outs (Fourier spectrum, attention, embedding ring, §5 and appendix)
-  are still single-run (seed 0); their qualitative claims are not yet
-  seed-averaged.
+  read-outs (Fourier spectrum, attention pattern, embedding ring, §5 and
+  appendix) are still single-run (seed 0); their qualitative claims are not
+  yet seed-averaged ([issue
+  #4](https://github.com/porth-bot/grokking-transformer/issues/4)). §9's
+  head-count read-out is the exception — it carries five seeds per arm and an
+  exact rank-sum test, and is where the format the rest should follow was
+  worked out.
 - **Architecture differs from Nanda et al.** (we use LayerNorm + GELU;
   their interp model was LN-free ReLU), which is likely part of why our
   final spectrum is sparse-but-not-extremely-sparse rather than >90%
