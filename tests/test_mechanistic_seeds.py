@@ -231,6 +231,19 @@ def test_the_memorization_ring_statistics_sit_at_the_unstructured_baseline(rows)
 
 # -- the cache, against the code ---------------------------------------------
 
+# How closely a live measurement can be expected to match the cached one on a
+# machine that is not the one that wrote it. The binding statistic is the
+# grokked model's per-head |A[=->a] - A[=->b]|: two softmax weights equal to
+# four decimals, so the difference cancels by a factor of 6,600 and inherits
+# 6600 * float32 eps ~ 8e-4 of relative error from the arithmetic alone. CI
+# came in 1.2e-4 away, inside that. A stale cache -- different weights or
+# changed code -- moves these numbers by whole percent, so 1e-3 still catches
+# what the test is for. (This is the tolerance the check *needs*, not the
+# tightest one that passed locally; an FD check in gp-from-scratch was
+# measuring exactly this and calling it a gradient.)
+LIVE_RTOL = 1e-3
+
+
 def test_the_committed_csv_still_matches_a_live_measurement(rows):
     """Both of seed 0's rows re-measured from the weights in the repo. Without
     this the other eight rows are only ever tested against themselves."""
@@ -247,7 +260,29 @@ def test_the_committed_csv_still_matches_a_live_measurement(rows):
             if np.isnan(value):
                 assert np.isnan(row[field]), field
             else:
-                assert row[field] == pytest.approx(value, rel=1e-6), (which, field)
+                assert row[field] == pytest.approx(value, rel=LIVE_RTOL), (
+                    which, field)
+
+
+def test_the_cancellation_that_sets_that_tolerance_is_real():
+    """The justification for LIVE_RTOL, measured rather than asserted.
+
+    If a later change makes the grokked attention *less* symmetric, this
+    cancellation shrinks and the tolerance becomes lazy rather than necessary;
+    this fails then, which is the point of pinning the reason and not just the
+    number.
+    """
+    from grokking.attention import eq_attention
+    from grokking.checkpoints import load_model
+    from grokking.data import modular_addition_dataset
+
+    model, _ = load_model(MAIN, which="final")
+    tokens, _ = modular_addition_dataset(97)
+    row = eq_attention(model, tokens)
+    a, b = row[:, 0], row[:, 1]
+    cancellation = float(np.abs(a).mean() / np.abs(a - b).mean())
+    assert cancellation > 1_000
+    assert cancellation * float(np.finfo(np.float32).eps) > LIVE_RTOL
 
 
 def test_the_table_and_the_figure_measure_the_ring_in_different_planes(rows):
