@@ -67,8 +67,6 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from _style import apply_style, plt  # noqa: E402
-
 from grokking.aggregate import fmt_median_range  # noqa: E402
 from grokking.seeds import ensure_runs  # noqa: E402
 from grokking.train import TrainConfig  # noqa: E402
@@ -432,7 +430,17 @@ def table(runs_dir: Path = RUNS) -> str:
 
 
 def figure(runs_dir: Path = RUNS, out: Path | None = None) -> Path:
-    """Two panels: the censored surface, and whether the frac curves are parallel."""
+    """Two panels: the censored surface, and whether the frac curves are parallel.
+
+    matplotlib is imported here rather than at module scope on purpose. Every
+    claim in Sec. 13 comes out of ``censored_median``, ``additive_fit`` and
+    ``censored_evidence``, which are pure NumPy -- and CI installs torch but not
+    matplotlib, so a module-level plotting import would make the whole test file
+    skip there and the censoring arithmetic would be covered on my laptop only.
+    ``grokking/aggregate.py`` is I/O-free for the same reason.
+    """
+    from _style import apply_style, plt
+
     apply_style()
     s = surface(runs_dir)
     med, cen = s["median"], s["censored"]

@@ -268,6 +268,11 @@ def test_wd_one_row_reproduces_the_frac_sweep_ordering():
 
 
 def test_figure_replays_without_training(tmp_path):
+    # The only test here that needs a plotting stack. CI installs torch but not
+    # matplotlib, so this one skips there while the censoring arithmetic, the
+    # additive fit and the README guards -- which is where the claims live --
+    # all still run.
+    pytest.importorskip("matplotlib")
     out = tmp_path / "surface.png"
     assert W.figure(out=out) == out
     assert out.stat().st_size > 10_000
