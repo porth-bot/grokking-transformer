@@ -416,3 +416,48 @@ def test_the_wd_zero_grok_happens_with_a_monotone_weight_norm():
         for value in norms:
             assert value >= peak - 1e-9, f"seed {seed} norm fell from {peak}"
             peak = max(peak, value)
+
+
+def test_readme_grid_table_is_the_generated_one():
+    """The §13 table in the README must be what ``table()`` prints, verbatim.
+
+    Every stale number this repo has shipped got there the same way: a table
+    hand-copied into the README, then the code underneath it changed. The grid
+    is the biggest such table in the repo, so it is pinned rather than trusted.
+    """
+    generated = W.table().split("\n\nAdditive")[0].strip()
+    readme = (ROOT / "README.md").read_text()
+    assert generated in readme, (
+        "README §13's grid table has drifted from wd_frac_surface.table():\n"
+        + generated)
+
+
+def test_readme_reports_the_substitution_result_it_measured():
+    """The headline sentence and the measurement must agree on the fractions."""
+    s = W.surface()
+    sub = W.substitution_check(s["censored"], s["n_censored"])
+    readme = (ROOT / "README.md").read_text()
+    assert sub["substitutes"] is True
+    # The claim in prose is "25% and 30% never grok, 40% does" at wd = 0.
+    assert sub["blocked"] == [0.25, 0.30] and sub["grokking"] == [0.40]
+    assert "the §1 sentence" in readme and "30%-data* statement" in readme
+
+
+def test_readme_does_not_claim_the_censored_cells_refute_additivity():
+    """The envelope withdrew that claim; the prose must not smuggle it back.
+
+    This is the assertion guarding the section's one genuine near-miss: the
+    (30%, 0) bound ratio is 2.29x, larger than the fit's worst open-cell
+    residual, and it would have read as a refutation if the seed-range envelope
+    had not been computed. If a later edit ever makes a censored cell genuinely
+    refute additivity, this test fails and the prose has to be rewritten -- which
+    is the point.
+    """
+    s = W.surface()
+    evidence = W.censored_evidence(s["median"], s["censored"], s["lo"], s["hi"])
+    assert not any(e["refutes_additivity"] for e in evidence)
+    for e in evidence:
+        assert e["ratio_lo"] < 1.0 < e["ratio_hi"], (
+            f"cell frac={e['frac']} wd={e['wd']} no longer straddles 1")
+    readme = (ROOT / "README.md").read_text()
+    assert "every one straddles 1" in readme

@@ -58,7 +58,9 @@ read-outs — Fourier spectrum, logit attribution, attention pattern, embedding
 ring — are *shown* on seed 0, which is the run whose checkpoints are committed
 and what the hero figure plots, and are **measured across the same five seeds
 in §12**; where the seed-averaged number differs from seed 0's, both are given
-and §12 is the one to believe. Logs in [`runs/`](runs/), regenerate figures
+and §12 is the one to believe. The one exception to the five-seed rule is §13's
+12-cell grid, which runs **3 seeds per cell** and says explicitly what three
+seeds can and cannot establish. Logs in [`runs/`](runs/), regenerate figures
 with `python experiments/plots.py`.
 
 ### 1. Weight decay controls whether — and when — grokking happens
@@ -85,6 +87,12 @@ the task loss: after step ~100 the training loss
 is nearly zero and almost all subsequent change in test accuracy is the
 norm-pressure term reorganizing the network's internals.
 
+Read the scope of that carefully, though: it is established **at 30% data**.
+§13 crosses this sweep with §2's and finds that the same wd = 0 control *does*
+grok at 40% data, in all three seeds, with a monotonically rising norm — so
+weight decay is what drives the transition here, not what makes generalization
+possible at all.
+
 ### 2. Less data, longer trance
 
 Weight decay 1.0, four training fractions (median grok step over 5 seeds,
@@ -104,7 +112,8 @@ memorization gets
 relatively cheaper (fewer pairs to store) while the general circuit's cost is
 fixed — so the phase in which memorization dominates stretches. At 60% data
 the "delay" nearly vanishes and grokking degenerates into ordinary learning;
-grokking is a *small-data* phenomenon.
+grokking is a *small-data* phenomenon. This slice is at wd = 1; §13 runs the
+same fractions at four weight decays and finds the two effects multiply.
 
 ### 3. Robustness: grokking survives a 10× learning-rate change
 
@@ -163,7 +172,10 @@ Two measurements on the main run (30%, wd = 1), same seed, same trajectory:
   train loss is pinned at ~0 and decay is the only force left. (Our first
   version of this run early-stopped 500 steps after grokking and *missed*
   the decline — the run was extended to 11k steps precisely so the plot
-  shows the dynamics rather than an artifact of the stopping rule.)
+  shows the dynamics rather than an artifact of the stopping rule.) The
+  decline belongs to weight decay rather than to grokking: §13's wd = 0
+  runs grok at 40% data with the norm rising monotonically throughout,
+  0.00% drawdown in every seed.
 - **Embedding Fourier spectrum** — the algorithm's fingerprint. At the
   memorization checkpoint, spectral energy is spread across all 48
   frequencies (top-5 share: **13.6%**, indistinguishable from unstructured).
@@ -647,6 +659,91 @@ reversal, the overlap that does not separate, the noise-floor variance — are
 asserted too, since those are the ones a later edit would smooth over. Closes
 [issue #4](https://github.com/porth-bot/grokking-transformer/issues/4).
 
+### 13. Does more data offset less regularization? (The wd × frac surface)
+
+§1 varies weight decay at 30% data; §2 varies data at wd = 1. Both are monotone,
+and both are consistent with a story neither can test: that the two knobs trade
+off, so enough data would buy grokking at a weight decay that cannot produce it
+alone. Reading a trade-off off two orthogonal slices is exactly the mistake a
+one-variable-at-a-time design invites. This is the 4 × 3 grid that tests it,
+three seeds per cell ([issue #3](https://github.com/porth-bot/grokking-transformer/issues/3)).
+
+Median grok step over 3 seeds, `[min–max]`; **> 25,000** means the cell did not
+grok within the budget:
+
+| train frac | wd 0 | wd 0.1 | wd 0.3 | wd 1 |
+|---|---|---|---|---|
+| 25% | **> 25,000** | **> 25,000** | 10,700 [8,300–12,400] | 3,100 [2,700–3,100] |
+| 30% | **> 25,000** | 10,800 [9,200–13,900] | 4,900 [4,100–5,300] | 1,300 [1,200–1,900] |
+| 40% | 2,100 [600–9,900] | 1,400 [500–3,400] | 700 [400–1,800] | 500 [300–700] |
+
+![wd x frac surface](figures/wd_frac_surface.png)
+
+**The answer to the title is yes, and it needs no model to say so.** Down the
+wd = 0 column, 25% and 30% never grok — 3 of 3 seeds each, at the full 25k
+budget — and 40% groks in all three seeds, median 2,100. So the §1 sentence
+"wd = 0 never groks" is a *30%-data* statement, not a fact about wd = 0: with
+40% of the addition table, the network gets there with no explicit
+regularizer at all, and it genuinely gets there (final test accuracy 0.9993,
+0.9996, 0.9998). This is a claim about which cells produced a number and which
+produced none, so no seed spread and no fit can move it.
+
+**But "they trade off" is not the same as "they interact", and the interaction
+is not there.** In logs the no-interaction null is additive —
+$\log_{10} T = \mu + a_{\text{frac}} + b_{\text{wd}}$, i.e. changing wd
+multiplies the delay by the same factor at every training fraction. Fitted over
+the nine cells with an identified median (3 residual dof) it holds well: rms
+residual **1.24×**, worst cell **1.51×**, against within-cell seed spreads of
+1.15× to **16.50×**. The fitted effects are just two independent multipliers —
+frac 25/30/40% at 2.81× / 1.36× / 0.26×, wd 0/0.1/0.3/1 at 2.09× / 1.69× /
+0.86× / 0.33×. On the region where both knobs produce a number, they act
+independently.
+
+**The censored cells look like they refute that, and they do not.** They are
+where the section could most easily have overclaimed, because a censored cell
+carries a real inequality the least-squares fit cannot use: the null predicts
+22,565 / 18,327 / 10,915 steps for (25%, 0), (25%, 0.1) and (30%, 0), and all
+three ran past 25,000 — bound ratios of 1.11× / 1.36× / **2.29×**, the last one
+apparently well beyond the fit's own 1.51× worst case. The check that kills it
+is refitting at the corners of the open cells' observed seed ranges, because the
+wd = 0 column effect rests on the single open cell in that column and its three
+seeds span 16.5×. Those envelopes are **[0.11, 9.95]**, **[0.51, 4.65]** and
+**[0.19, 18.99]** — every one straddles 1. The censoring is consistent with pure
+multiplicative independence; the wd = 0 column is simply slow enough that 25%
+and 30% fall past the budget and 40% does not. There is no cliff here, only the
+edge of the compute.
+
+So the honest summary is the weaker and more useful one: **data substitutes for
+weight decay, multiplicatively, with no synergy detectable at this resolution.**
+
+**One mechanistic consequence, and it qualifies §5.** The wd = 0 runs at 40%
+reach ~0.999 test accuracy with a parameter norm that never once falls below its
+running peak — maximum drawdown **0.00%** across every eval of all three seeds,
+ending at 722 / 76 / 32 against an initial 21.7. The wd = 1 runs at 30% fall
+7–23% from their peak. §5's norm rise-then-fall is therefore a signature of the
+*weight-decay-driven* transition, not of grokking: a network can grok with a
+monotonically growing norm. Consistent with the direction of §7 (the norm
+pressure matters where it is applied), and it is the reason this section does
+not describe the wd = 0 column as "grokking without a cause" — the delay is
+still there (memorization at step 100, generalization at 600–9,900), it is just
+not being driven by norm decay.
+
+**What three seeds cannot do.** §9 separates its arms at p = 0.008, the floor of
+the exact rank-sum test at five vs five. At three vs three that floor is
+1/C(6,3) = **0.05**, so this grid ranks cells and compares steps against spreads
+but certifies no single pairwise comparison at §9's level. The 40% row in
+particular *looks* flatter than the others (1.4× across wd 0.3 → 1, against 3.45×
+and 3.77× in the rows above), which would be an interaction — but its seed
+spreads there are 2.33× and 4.50×, so the flattening is inside the noise and is
+not claimed. The error bars in the right panel are drawn so a reader can check
+that themselves.
+
+Twenty-one of the 36 runs are new; the other 15 are §1 and §2's own sweep cells,
+reused by name and checked field-by-field against `run_sweep`'s configs so the
+surface cannot silently mix two setups
+([`wd_frac_surface.py`](experiments/wd_frac_surface.py)). Closes
+[issue #3](https://github.com/porth-bot/grokking-transformer/issues/3).
+
 ### Appendix: attention and embedding geometry
 
 The same before/after story is visible in two more read-outs of the
@@ -855,7 +952,6 @@ replay path and that every artifact the replay reads is committed.
 
 ## Next
 
-- wd × frac interaction surface (a coarse 2D grid).
 - **Retrain the main config's seeds 1–4 to a matched 11,100 steps** and redo
   §12. Right now the five "final" checkpoints are 11.1k, 2.1k, 1.9k, 1.8k and
   2.0k steps, so how much of the circuit's sparsification is grokking and how
