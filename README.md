@@ -772,7 +772,7 @@ Every figure, from a clean clone, without training anything:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-./reproduce.sh                      # tests, mypy, all 17 figures: ~35 s
+./reproduce.sh                      # tests, mypy, all 18 figures: ~35 s
 ```
 
 `requirements.txt` pins the exact versions the committed runs were produced

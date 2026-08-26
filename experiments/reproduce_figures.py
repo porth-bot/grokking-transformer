@@ -8,6 +8,7 @@ repo -- the sweep CSV/JSON logs in ``runs/`` and the model checkpoints
     CSV logs      -> lr_sweep                                        (lr_sweep.py)
     CSV logs      -> dropout_control                          (dropout_control.py)
     CSV logs      -> wd_scope                                        (wd_scope.py)
+    CSV logs      -> wd_frac_surface                          (wd_frac_surface.py)
     CSV logs (+ read-out CSV) -> head_count                        (head_count.py)
     read-out CSV  -> mechanistic_seeds                    (mechanistic_seeds.py)
     CSV logs      -> progress_measures                      (progress_measures.py)
@@ -46,6 +47,7 @@ import plots
 import progress_measures
 import run_sweep
 import swap_equivariance
+import wd_frac_surface
 import wd_scope
 
 from grokking.train import TrainConfig
@@ -65,6 +67,7 @@ FIGURES = (
     "lr_sweep.png",            # lr_sweep.figure_and_table
     "dropout_control.png",     # dropout_control.figure_and_table
     "wd_scope.png",            # wd_scope.figure_and_table
+    "wd_frac_surface.png",     # wd_frac_surface.figure
     "head_count.png",          # head_count.figure_and_table
     "mechanistic_seeds.png",   # mechanistic_seeds.figure
     "progress_measures.png",   # progress_measures.figure
@@ -95,6 +98,11 @@ CSV_RUNS = [
     # weight-decay scope ablation (§7): embeddings-only and non-embeddings-only;
     # the all-parameters arm is the main run already listed above.
     wd_scope.cfg_for(scope).run_name() for scope in wd_scope.SCOPES
+] + [
+    # (wd, frac) interaction surface (§13): the twelve-cell grid at three seeds.
+    # Five of its cells are the sweep runs already listed above, so those names
+    # repeat here and are simply checked twice; the other seven are new.
+    name for names in wd_frac_surface.run_names().values() for name in names
 ] + [
     # operations comparison (§11): sub/mul at wd {1.0, 0.1} over three seeds;
     # add reuses the main-run and wd0.1 sweep CSVs already listed above.
@@ -164,6 +172,7 @@ def main():
     mechanistic_seeds.figure()  # §12, from the committed read-out CSV
     wd_scope.figure_and_table(*(wd_scope.cfg_for(s).run_name()
                                 for s in wd_scope.SCOPES))  # §7
+    wd_frac_surface.figure()  # §13, the (wd, frac) grid from its run logs
     progress_measures.figure()  # §10, from the committed progress trajectory CSV
     attention_entropy.figure()  # appendix, from the committed attention trajectory
     operations.figure_and_table()  # §11, sub/mul vs add from committed CSVs
