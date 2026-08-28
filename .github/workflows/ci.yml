@@ -21,3 +21,31 @@ jobs:
       # types). CI already pins 3.12, so no version gate is needed here.
       - name: type check (mypy)
         run: mypy
+
+  # Build paper/main.pdf here, not on a laptop. The figures are regenerated
+  # from the committed logs first (paper/figures/ is not in the repo), so this
+  # job fails if the paper includes a figure the replay no longer produces, or
+  # if the LaTeX stops compiling -- neither of which the test job can see.
+  paper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Four of the eighteen figures are read off the committed checkpoints, so
+      # this job needs torch as well as matplotlib.
+      - run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -e ".[dev]"
+      - name: install tectonic
+        run: |
+          set -euo pipefail
+          ver=0.17.0
+          url="https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${ver}/tectonic-${ver}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL "$url" | tar xz -C /usr/local/bin tectonic
+          tectonic --version
+      - run: ./paper/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paper
+          path: paper/main.pdf
