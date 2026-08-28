@@ -30,3 +30,14 @@ runs_lr/*.pt
 # overwrite it).
 runs_progress/
 runs_attention/
+
+# The paper build regenerates its figures from the committed logs on every
+# run (paper/build.sh), so they are an artifact, not a source; committing them
+# would put a stale copy back in the loop. Same for the LaTeX side-products.
+paper/figures/
+paper/main.pdf
+paper/*.aux
+paper/*.log
+paper/*.bbl
+paper/*.blg
+paper/*.out

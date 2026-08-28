@@ -152,15 +152,15 @@ def check_artifacts():
     return missing
 
 
-def main():
-    missing = check_artifacts()
-    if missing:
-        print("ERROR: missing committed artifacts required to reproduce figures:")
-        for m in missing:
-            print(f"  - {m}")
-        print("Run experiments/run_sweep.py to (re)generate them.")
-        return 1
+def regenerate_all():
+    """Call every figure's producer, in the order FIGURES lists them.
 
+    Split out of ``main`` so a second consumer can run the *same* calls under a
+    different output setting: ``experiments/paper_figures.py`` wraps this to
+    render the paper's copies at print resolution. Sharing the call list is the
+    point -- a figure added here reaches the paper automatically, and the paper
+    can never be built from a different code path than the README's figures.
+    """
     print("Regenerating CSV-based figures ...")
     plots.main_grokking_figure()
     plots.loss_figure()
@@ -184,6 +184,17 @@ def main():
     attention_pattern.main()
     logit_attribution.main()
 
+
+def main():
+    missing = check_artifacts()
+    if missing:
+        print("ERROR: missing committed artifacts required to reproduce figures:")
+        for m in missing:
+            print(f"  - {m}")
+        print("Run experiments/run_sweep.py to (re)generate them.")
+        return 1
+
+    regenerate_all()
     print("All figures reproduced into figures/.")
     return 0
 

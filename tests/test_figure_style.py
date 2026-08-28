@@ -33,16 +33,42 @@ import _style  # noqa: E402
 
 
 def figure_scripts():
-    """Every experiment module that writes a figure."""
+    """Every experiment module that *draws* a figure.
+
+    Both halves of the predicate are load-bearing. ``savefig(`` alone also
+    matches ``paper_figures.py``, which draws nothing of its own -- it re-runs
+    these scripts' own producers with savefig intercepted, so the style it
+    renders under is the one they apply, and requiring it to call
+    ``apply_style()`` would be a cargo-cult line in a module with no plot in
+    it. Creating a figure is the thing that makes the rcParams question apply,
+    so ask for that too.
+    """
+    def draws(src):
+        return "savefig(" in src and ("plt.subplots(" in src or "plt.figure(" in src)
+
     return sorted(
         p for p in EXPERIMENTS.glob("*.py")
-        if p.name != "_style.py" and "savefig(" in p.read_text()
+        if p.name != "_style.py" and draws(p.read_text())
     )
 
 
 def test_there_is_at_least_one_figure_script():
-    # Guards the discovery above: an empty list would make the next test vacuous.
-    assert len(figure_scripts()) >= 10
+    # Guards the discovery above: an empty list would make the next test
+    # vacuous, and so would a predicate that silently narrowed to a couple of
+    # scripts. 15 is what it finds today.
+    assert len(figure_scripts()) >= 15
+
+
+def test_the_paper_renderer_is_excluded_because_it_draws_nothing():
+    """Pins the premise of the exclusion above rather than the exclusion.
+
+    ``paper_figures.py`` is out of the list only because it creates no figure.
+    If it ever starts plotting one, it needs the shared style like everything
+    else, and this fails instead of the exclusion going quietly unnoticed.
+    """
+    src = (EXPERIMENTS / "paper_figures.py").read_text()
+    assert "plt.subplots(" not in src and "plt.figure(" not in src
+    assert not re.search(r"rcParams\s*(\.update|\[)", src)
 
 
 @pytest.mark.parametrize("path", figure_scripts(), ids=lambda p: p.name)
