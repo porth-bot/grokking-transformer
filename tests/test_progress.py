@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 import torch
 
 from grokking.data import modular_addition_dataset
@@ -224,3 +225,70 @@ def test_the_restricted_loss_leads_early_and_is_overtaken_before_the_jump():
     # The lead it opens with, and the margin it is overtaken by.
     assert traj[100]["test_loss"] - traj[100]["restricted_loss"] > 0.9
     assert 0 < traj[1100]["restricted_loss"] - traj[1100]["test_loss"] < 0.05
+
+
+# -- the two quantities the figure's panel titles now report ------------------
+#
+# Both titles used to assert a shape: the restricted loss "already below the
+# test loss" before the jump (it is overtaken at 1,100), and the embedding
+# structure forming "well before the test-accuracy jump" (13% of its rise
+# does). A title that computes its number cannot drift from the data the way
+# those did, so what is tested here is that the computation is the honest one.
+
+def _progress_helpers():
+    import progress_measures
+
+    return progress_measures
+
+
+def test_overtake_step_finds_the_crossing_and_reports_none_when_there_is_none():
+    P = _progress_helpers()
+    steps = [0, 100, 200, 300, 400]
+    # restricted leads, then the full model passes it at 300.
+    assert P.overtake_step(steps, [5, 4, 3, 2, 1], [6, 5, 4, 1.5, 0.5], after=0) == 300
+    # `after` is exclusive, which is what keeps the initialization point out of
+    # it -- at step 0 the two measures are interleaved for reasons that have
+    # nothing to do with the circuit, and the real call passes the memorization
+    # step for exactly that reason.
+    crossed_at_zero = [4, 5, 4, 1.5, 0.5]
+    assert P.overtake_step(steps, [5, 4, 3, 2, 1], crossed_at_zero, after=-1) == 0
+    assert P.overtake_step(steps, [5, 4, 3, 2, 1], crossed_at_zero, after=0) == 300
+    # A lead that holds throughout is reported as such, not as a step.
+    assert P.overtake_step(steps, [5, 4, 3, 2, 1], [6, 5, 4, 3, 2], after=0) is None
+
+
+def test_the_accuracy_jump_is_not_the_grok_step():
+    """The grok step is the 99% crossing and lands after the accuracy moves."""
+    P = _progress_helpers()
+    traj = _trajectory("progress_p97_frac0.30_wd1_seed0")
+    steps = sorted(traj)
+    acc = [traj[s]["test_acc"] for s in steps]
+
+    jump = P.accuracy_jump_step(steps, acc, memorize_step=100)
+    assert jump == 1600
+    assert traj[1500]["test_acc"] < 0.6 < traj[1600]["test_acc"]
+    # Sec. 4.3's two numbers, from the committed trajectory.
+    assert P.overtake_step(steps, [traj[s]["restricted_loss"] for s in steps],
+                           [traj[s]["test_loss"] for s in steps], after=100) == 1100
+    share = P.pre_jump_rise_share(
+        steps, [traj[s]["emb_top_frac"] for s in steps], jump, memorize_step=100
+    )
+    assert round(share, 2) == 0.13
+
+
+def test_pre_jump_share_takes_the_generous_reading_of_the_claim_it_bounds():
+    """It compares the read-out's *best* pre-jump value, not its last one.
+
+    Rounding the claim in favour of "it moved early" is deliberate: the number
+    is used to argue the rise is mostly post-jump, so it should be the number
+    hardest for that argument.
+    """
+    P = _progress_helpers()
+    steps = [0, 100, 200, 300, 400]
+    values = [0.0, 0.10, 0.30, 0.20, 0.50]   # peaks at 200, dips, then rises
+    # From memorization (0.10) to the maximum (0.50); best pre-jump is 0.30.
+    assert P.pre_jump_rise_share(
+        steps, values, jump=400, memorize_step=100
+    ) == pytest.approx(0.5)
+    # A read-out that never moves reports 0, not a division by zero.
+    assert P.pre_jump_rise_share(steps, [0.2] * 5, jump=400, memorize_step=100) == 0.0

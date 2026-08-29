@@ -106,6 +106,56 @@ def generate(out_dir: Path = RUNS) -> None:
     print(f"wrote runs/{NAME}.csv ({len(rows)} evals) and .json", flush=True)
 
 
+def overtake_step(steps, restricted, test_loss, after=0):
+    """First step after ``after`` where the full model's test loss goes below
+    the restricted loss, or ``None`` if it never does.
+
+    The restricted loss starts well below the test loss -- that is the whole
+    point of the measure -- but the test loss is falling too, and on this run it
+    catches up *before* the accuracy jumps. The left panel's title used to
+    assert the lead held "before the jump"; it holds through step 1,000 and not
+    after, so the title now reports where the two cross instead of describing a
+    shape the data does not have.
+    """
+    for step, r, t in zip(steps, restricted, test_loss):
+        if step > after and t < r:
+            return int(step)
+    return None
+
+
+def accuracy_jump_step(steps, acc, memorize_step):
+    """First eval at which test accuracy clears the midpoint of its own rise.
+
+    Not the grok step, which is the 99% crossing and lands *after* the
+    accuracy has already moved: on the committed run the grok step is 1,900
+    while accuracy goes 0.53 -> 0.86 at 1,600. Anything asking "did this
+    read-out move before the accuracy did" has to compare against the latter,
+    or it credits the read-out with rises that happened after the jump.
+    """
+    at_mem = next(a for s, a in zip(steps, acc) if s == memorize_step)
+    final = acc[-1]
+    midpoint = 0.5 * (at_mem + final)
+    return next(int(s) for s, a in zip(steps, acc)
+                if s > memorize_step and a > midpoint)
+
+
+def pre_jump_rise_share(steps, values, jump, memorize_step):
+    """Fraction of a read-out's rise since memorization that precedes ``jump``.
+
+    "Begins to climb before the accuracy step" is true of almost any rising
+    quantity and says nothing about how much of the climb is pre-jump. Measured
+    from the memorization value to the run's maximum, the embedding top-5 share
+    completes about a tenth of its rise before the accuracy jumps -- a much
+    weaker claim than the panel used to make, and the one the curve supports.
+    """
+    start = next(v for s, v in zip(steps, values) if s == memorize_step)
+    at_jump = max(v for s, v in zip(steps, values) if s < jump)
+    total = max(values)
+    if total == start:
+        return 0.0
+    return (at_jump - start) / (total - start)
+
+
 def _read_csv(path: Path) -> dict[str, list[float]]:
     with open(path) as f:
         header = f.readline().strip().split(",")
@@ -132,12 +182,13 @@ def figure(csv_path: Path = RUNS / f"{NAME}.csv") -> None:
 
     fig, axes = plt.subplots(1, 2, figsize=(9.4, 3.4), constrained_layout=True)
 
-    # Left: the mechanism losses vs the true test loss. The striking read is the
-    # memorization plateau (left of the grok line): the test loss is high and
-    # flat, but the RESTRICTED loss (only the 5 key a+b frequencies) is already
-    # *below* it and falling -- the generalizing circuit is the better predictor
-    # before the accuracy jump. Post-grok the EXCLUDED loss (key freqs removed)
-    # stays near 1 while the test loss collapses to ~1e-2: the model depends on
+    # Left: the mechanism losses vs the true test loss. At memorization the
+    # RESTRICTED loss (only the 5 key a+b frequencies) is already ~0.9 nats
+    # BELOW the full model's test loss -- the generalizing circuit is the better
+    # predictor there. It does not stay ahead: both fall through the delay and
+    # the full model overtakes it well before the accuracy jumps, which is what
+    # the title reports. Post-grok the EXCLUDED loss (key freqs removed) holds a
+    # median near 1 while the test loss collapses to ~1e-2: the model depends on
     # exactly those frequencies.
     ax = axes[0]
     ax.plot(steps, d["test_loss"], color="k", lw=1.5, label="test loss (full model)")
@@ -152,11 +203,17 @@ def figure(csv_path: Path = RUNS / f"{NAME}.csv") -> None:
     ax.set_ylim(0.1, 8)
     ax.set_xlabel("step")
     ax.set_ylabel("cross-entropy loss (all pairs)")
-    ax.set_title("Before the jump, the a+b-circuit-only loss is\nalready below "
-                 "the test loss and falling", loc="left", fontsize=9)
+    over = overtake_step(steps, d["restricted_loss"], d["test_loss"],
+                         after=meta["memorize_step"])
+    ax.set_title("The a+b-circuit-only loss starts below the test loss"
+                 + (f"\nand is overtaken at step {over:,}, before the jump"
+                    if over is not None else "\nand keeps the lead throughout"),
+                 loc="left", fontsize=9)
     ax.legend(fontsize=7.5, loc="lower left")
 
-    # Right: embedding sparsity climbs BEFORE the accuracy jump.
+    # Right: embedding sparsity against test accuracy. It does start climbing
+    # before the accuracy jumps, but only 13% of its rise is pre-jump, which
+    # is why the title reports the share instead of the direction.
     ax = axes[1]
     ax.plot(steps, d["emb_top_frac"], color="C0", lw=1.8,
             label=f"embedding top-{meta['k_emb']} energy")
@@ -172,8 +229,12 @@ def figure(csv_path: Path = RUNS / f"{NAME}.csv") -> None:
     ax2.set_ylabel("test accuracy")
     ax2.set_ylim(0, 1.02)
     ax2.spines["top"].set_visible(False)
-    ax.set_title("Embedding structure forms gradually,\n"
-                 "starting well before the test-accuracy jump", loc="left", fontsize=9)
+    jump = accuracy_jump_step(steps, d["test_acc"], meta["memorize_step"])
+    share = pre_jump_rise_share(steps, d["emb_top_frac"], jump,
+                                meta["memorize_step"])
+    ax.set_title("Embedding structure forms gradually;\n"
+                 f"{share:.0%} of the rise comes before the accuracy jump",
+                 loc="left", fontsize=9)
 
     fig.suptitle("Progress measures: the generalizing circuit forms gradually, "
                  "then the accuracy jumps", y=1.07)
