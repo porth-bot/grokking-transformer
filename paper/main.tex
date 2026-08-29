@@ -863,10 +863,13 @@ the network can only memorize.
 
 \begin{table}[h]
   \centering
-  \caption{Operations at 30\% data, three seeds per cell. The
-  $(\text{sub}, wd\,{=}\,0.1)$ cell is partly censored: two of its three seeds
-  never grok inside the 25k-step budget, so it is a single run and not a
-  median.}
+  \caption{Operations at 30\% data, three seeds per cell. The addition rows
+  are the first three seeds of Table~\ref{tab:wd}'s sweep, reused so that
+  every row here rests on the same number of runs --- which is why their
+  ranges are narrower than Table~\ref{tab:wd}'s five-seed ones for the same
+  cells. The $(\text{sub}, wd\,{=}\,0.1)$ cell is partly censored: two of its
+  three seeds never grok inside the 25k-step budget, so it is a single run and
+  not a median.}
   \label{tab:ops}
   \begin{tabular}{llcc}
     \toprule

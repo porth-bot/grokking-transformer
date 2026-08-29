@@ -425,8 +425,13 @@ The read-out (main config, seed 0, CPU rerun; grok at ~1900):
   its top 5 frequencies at memorization to ~47% by the end of the instrumented
   run (peak 0.477 at step 3,500) — the same sparsification §5 sees between two
   checkpoints, now resolved in time. It does begin to climb before the accuracy
-  step, but only a quarter of the way: 0.136 → 0.171 by step 1,500, then 0.286
-  at 1,600 as the accuracy jumps, and the rest afterwards.
+  step, but that is true of almost any rising quantity and is not the useful
+  measurement: counted from its memorization value (0.136) to the run's maximum
+  (0.477), and taking its best pre-jump reading (0.181 at step 900), **13% of
+  the rise precedes the accuracy jump** at step 1,600 and the rest arrives at or
+  after it. The figure's right panel reports that percentage rather than
+  asserting the read-out moves "well before" the accuracy, which was the
+  earlier and more flattering wording.
 - **The model genuinely depends on those frequencies.** After grokking the full
   test loss reaches ~$10^{-2}$ (median $6.4\times10^{-3}$ over the post-grok
   evals) while the *excluded* loss holds a median of **0.97** and fluctuates
