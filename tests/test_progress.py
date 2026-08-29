@@ -139,3 +139,88 @@ def test_committed_checkpoints_move_the_right_way():
     assert restricted_loss(fin, tokens, targets, p, key) < restricted_loss(
         mem, tokens, targets, p, key
     )
+
+
+# -- what the trajectory actually looks like ---------------------------------
+#
+# Sec. 10 described the delay as a "flat test-accuracy plateau" with accuracy
+# "still stuck near 15%" at step 1,400, and Sec. 4 contrasted p = 113 against
+# p = 97 "sitting near chance". The committed logs refute all three, so the
+# corrected statements are asserted here rather than left to prose: they are
+# exactly the kind a later edit would smooth back toward the tidier story.
+
+def _trajectory(name, runs="runs"):
+    import csv
+
+    root = Path(__file__).resolve().parents[1]
+    with open(root / runs / f"{name}.csv", newline="") as f:
+        rows = list(csv.DictReader(f))
+    return {int(r["step"]): {k: float(v) for k, v in r.items()} for r in rows}
+
+
+def test_the_delay_is_not_a_near_chance_plateau_in_any_seed():
+    """Sec. 4: after memorization the model is 16-29x chance and climbing."""
+    import json
+
+    root = Path(__file__).resolve().parents[1]
+    chance = 1.0 / 97
+    at_memorize, before_jump = [], []
+    for seed in range(5):
+        name = f"p97_frac0.30_wd1_seed{seed}"
+        traj = _trajectory(name)
+        summary = json.loads((root / "runs" / f"{name}.json").read_text())
+        acc = {s: r["test_acc"] for s, r in traj.items()}
+
+        at_memorize.append(acc[summary["memorize_step"]])
+        # The last eval before test accuracy first clears 0.6, i.e. the last
+        # look at the model while the delay is still running.
+        jump = min(s for s, a in acc.items() if a > 0.6)
+        before_jump.append(acc[max(s for s in acc if s < jump)])
+
+    assert min(at_memorize) > 15 * chance, (
+        f"memorization accuracies {at_memorize} are supposed to be far above "
+        f"the {chance:.4f} chance level"
+    )
+    # The range Sec. 4 quotes, to the precision it quotes it at.
+    assert round(min(at_memorize), 3) == 0.163
+    assert round(max(at_memorize), 3) == 0.302
+    assert round(sum(at_memorize) / len(at_memorize), 3) == 0.247
+    # And every seed is materially higher again just before the jump.
+    assert all(b > m for b, m in zip(before_jump, at_memorize))
+    assert min(before_jump) > 0.37
+
+
+def test_p113s_memorization_accuracy_sits_inside_p97s_seed_range():
+    """Sec. 4's "softer at p = 113" was one seed against one seed."""
+    import json
+
+    root = Path(__file__).resolve().parents[1]
+    p97 = []
+    for seed in range(5):
+        name = f"p97_frac0.30_wd1_seed{seed}"
+        summary = json.loads((root / "runs" / f"{name}.json").read_text())
+        p97.append(_trajectory(name)[summary["memorize_step"]]["test_acc"])
+
+    name = "p113_frac0.30_wd1_seed0"
+    summary = json.loads((root / "runs" / f"{name}.json").read_text())
+    p113 = _trajectory(name)[summary["memorize_step"]]["test_acc"]
+
+    assert min(p97) < p113 < max(p97), (
+        f"p=113 reads {p113:.3f}, p=97's five seeds span "
+        f"[{min(p97):.3f}, {max(p97):.3f}] -- if that stops being an overlap "
+        "the Sec. 4 comparison can be made again"
+    )
+    # And the seed the old comparison used was the weakest of the five.
+    assert p97[0] == min(p97)
+
+
+def test_the_restricted_loss_leads_early_and_is_overtaken_before_the_jump():
+    """Sec. 10: restricted < full through step 1,000, full ahead from 1,100."""
+    traj = _trajectory("progress_p97_frac0.30_wd1_seed0")
+    lead = {s: r["restricted_loss"] < r["test_loss"] for s, r in traj.items()}
+
+    assert all(lead[s] for s in range(100, 1001, 100))
+    assert not any(lead[s] for s in range(1100, 1601, 100))
+    # The lead it opens with, and the margin it is overtaken by.
+    assert traj[100]["test_loss"] - traj[100]["restricted_loss"] > 0.9
+    assert 0 < traj[1100]["restricted_loss"] - traj[1100]["test_loss"] < 0.05

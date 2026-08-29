@@ -156,12 +156,22 @@ The larger modulus groks **sooner**, not later: memorization is instant in
 both, but generalization arrives 3× earlier at $p = 113$. The absolute
 training-set size dominates — this is the same lever as §2 (grokking is a
 small-data phenomenon), and 3,831 pairs sit further from the critical
-fraction than 2,823 do. The transition is also softer at $p = 113$: test
-accuracy is already 29% at the memorization point and climbs steadily, rather
-than sitting near chance through a long plateau. So "time-to-grok" is not a
-clean increasing function of $p$; at fixed data *fraction*, the data-quantity
-effect wins on this axis. (One seed, one extra modulus — a direction, not a
-scaling law.)
+fraction than 2,823 do. So "time-to-grok" is not a clean increasing function
+of $p$; at fixed data *fraction*, the data-quantity effect wins on this axis.
+(One seed, one extra modulus — a direction, not a scaling law.)
+
+This section used to add that the transition is "softer" at $p = 113$, since
+test accuracy is already 29% at its memorization point "rather than sitting
+near chance through a long plateau". **Both halves of that are wrong and the
+committed logs say so.** $p = 97$ does not sit near chance either: across the
+five main-config seeds its test accuracy at the memorization step is 0.247
+[0.163–0.302] against a chance level of $1/97 = 0.0103$, i.e. 16–29× chance,
+and it climbs to 0.377–0.557 at the last eval before the jump. So $p = 113$'s
+0.288 sits **inside** $p = 97$'s own seed range, and the comparison was
+between one seed of each — the $p = 97$ run quoted was seed 0, which is the
+*lowest* of the five on this statistic. The delay is not a near-chance
+plateau at either modulus; it is a steady climb that ends in a jump. §10
+measures what is climbing during it.
 
 ### 5. What changes inside: norm and Fourier structure
 
@@ -377,8 +387,9 @@ outlive them silently.
 Sections 5 and 8 read the Fourier structure of *two* checkpoints (memorization
 and final). This section makes it a **trajectory**: rerun the main config with
 per-eval instrumentation and log Nanda et al.'s progress measures at every step,
-watching the generalizing circuit form continuously under the flat test-accuracy
-plateau. The instrumentation is a one-line `on_eval` hook into the trainer that
+watching the generalizing circuit form continuously underneath a test accuracy
+that is far from the answer but, as §4 now records, not flat and not near
+chance. The instrumentation is a one-line `on_eval` hook into the trainer that
 snapshots the (tiny) model at each eval; the key `a+b` frequencies are then read
 off the *final* model (here $k\in\{5,14,20,36,38\}$) and held fixed across the
 trajectory, so we track the same circuit forming rather than a moving target.
@@ -394,20 +405,32 @@ train/test split ([`progress_measures.py`](experiments/progress_measures.py)).
 
 The read-out (main config, seed 0, CPU rerun; grok at ~1900):
 
-- **The generalizing circuit is the better predictor *before* the jump.** At the
-  memorization point (step 100), the full model's **test loss is 5.03** yet the
-  **restricted loss is 4.10** — projecting onto just the 5 key frequencies is
-  already ~0.9 nats *better* than the whole memorizing model, and it keeps
-  falling smoothly all through the plateau (to 2.6 by step 1400) while test
-  accuracy is still stuck near 15%. The circuit is being built continuously; the
-  accuracy jump is when it finally dominates.
+- **The generalizing circuit is the better predictor early in the delay — and
+  only early.** At the memorization point (step 100) the full model's **test
+  loss is 5.03** yet the **restricted loss is 4.10**: projecting onto just the
+  5 key frequencies is already ~0.9 nats *better* than the whole memorizing
+  model. The restricted loss keeps falling (to 2.64 by step 1,400), but so does
+  the full one, and **the full model overtakes it at step 1,100** — 3.29 against
+  3.31 — some 500 steps before the accuracy jump at 1,600. So the honest
+  statement is that the circuit is legible in the loss *before* it is legible in
+  the accuracy, not that it stays ahead until the jump.
+- **Test accuracy is not flat during any of this**, which an earlier version of
+  this section had wrong ("still stuck near 15%" at step 1,400; it is 0.45
+  there). It climbs from 0.163 at memorization to 0.527 at step 1,500 — rising
+  at all but one eval, a single excursion at step 600 where it drops to 0.086
+  and both losses spike — and then jumps to 0.998 by 1,900. What is sudden is
+  the crossing of the 99% threshold that defines the grok step, not the model's
+  improvement.
 - **Embedding structure rises gradually**, from 14% of the spectral energy in
-  its top 5 frequencies at memorization to ~47% by the end, beginning to climb
-  before the accuracy step (right panel) — the same sparsification §5 sees
-  between two checkpoints, now resolved in time.
+  its top 5 frequencies at memorization to ~47% by the end of the instrumented
+  run (peak 0.477 at step 3,500) — the same sparsification §5 sees between two
+  checkpoints, now resolved in time. It does begin to climb before the accuracy
+  step, but only a quarter of the way: 0.136 → 0.171 by step 1,500, then 0.286
+  at 1,600 as the accuracy jumps, and the rest afterwards.
 - **The model genuinely depends on those frequencies.** After grokking the full
-  test loss reaches ~$10^{-2}$, but the *excluded* loss stays near 1 — remove the
-  5 key frequencies and the solution collapses.
+  test loss reaches ~$10^{-2}$ (median $6.4\times10^{-3}$ over the post-grok
+  evals) while the *excluded* loss holds a median of **0.97** and fluctuates
+  over [0.16, 2.17] — remove the 5 key frequencies and the solution collapses.
 
 This is the quantitative version of §8's static hint ("the circuit is already
 forming under the memorization, before the test-accuracy jump"). Because the
