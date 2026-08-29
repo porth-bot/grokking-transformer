@@ -3,10 +3,13 @@
 % Build:  ./paper/build.sh        (regenerates figures, then runs tectonic)
 % CI builds this on every push; see .github/workflows/ci.yml, job "paper".
 %
-% STATUS: outline. Every \outline{...} block below is a plan for prose that is
-% not written yet, and the \outlinetrue switch on the next line makes them
+% STATUS: draft. The results sections (3, 4, 5) are written; the framing
+% sections -- abstract, introduction, setup, related work, limitations,
+% conclusion -- are still \outline{...} blocks, each a plan for prose that is
+% not written yet. The \outlinetrue switch on the next line makes those
 % visible in the PDF (with a DRAFT banner) so an unfinished draft cannot be
-% mistaken for a finished one. Setting \outlinefalse hides them.
+% mistaken for a finished one. Setting \outlinefalse hides them, and the
+% banner and the switch both come out when the last block does.
 %
 % Figures come from paper/figures/*.pdf, which is NOT committed: it is
 % regenerated from the committed logs by experiments/paper_figures.py before
@@ -21,6 +24,9 @@
 \usepackage{booktabs}
 \usepackage{xcolor}
 \usepackage[numbers]{natbib}
+% Keep each figure inside the section that discusses it: without this the
+% later floats queue up and land after the bibliography.
+\usepackage[section]{placeins}
 \usepackage[colorlinks=true,allcolors=blue!55!black]{hyperref}
 
 \graphicspath{{figures/}}
@@ -61,8 +67,9 @@
 sections have fixed which numbers are the headline ones. It has to say: a
 one-layer decoder-only transformer trained full-batch on 30\% of
 $(a+b) \bmod 97$ reaches 100\% train accuracy at step ${\sim}100$ and stays
-near chance on test for ${\sim}1{,}300$ steps (median over five seeds) before
-jumping to 100\%; what moves that delay (weight decay, data fraction, and
+far below it on test for ${\sim}1{,}300$ steps (median over five seeds) ---
+climbing, not flat, and not near chance: $0.247$ [$0.163$--$0.302$] at
+memorization against $1/97$ --- before jumping to 100\%; what moves that delay (weight decay, data fraction, and
 whether the two trade off); where in the network the norm pressure has to act;
 and what the circuit looks like on either side of the jump, with the
 mechanistic read-outs measured over five seeds rather than shown on one. It
@@ -90,8 +97,9 @@ contributions list, phrased so that no item claims discovery.}
   commits (seed~0, $(a+b) \bmod 97$, 30\% training data, weight decay $1.0$).
   \emph{Left:} train and test accuracy against step (log $x$), with the
   memorization and generalization steps marked. Training accuracy saturates
-  early; test accuracy stays near chance for roughly an order of magnitude in
-  step count and then jumps. \emph{Right:} the $\ell_2$ norm of all
+  early; test accuracy then climbs slowly for roughly an order of magnitude in
+  step count --- from $0.16$ at memorization to $0.51$, against a chance level
+  of $1/97 = 0.0103$ --- before jumping to $1.0$. \emph{Right:} the $\ell_2$ norm of all
   parameters over the same trajectory, rising to the transition and falling
   afterwards. Seed spread is not shown here --- it is in Figures~\ref{fig:wd}
   and~\ref{fig:frac}.}
@@ -121,9 +129,13 @@ Section~\ref{sec:surface} grid, which is three.}
   \centering
   \includegraphics[width=\linewidth]{grokking_loss.pdf}
   \caption{The same seed-0 run in cross-entropy rather than accuracy (log
-  both axes). Train loss falls steadily while test loss stays flat and then
-  collapses at the transition, which is why the delay is legible as overfitting
-  before it is legible as generalization.}
+  both axes). Train loss falls steadily; test loss \emph{rises} to its
+  maximum of $5.03$ at the memorization step, which is why the delay is
+  legible as overfitting before it is legible as generalization. It does not
+  then stay there: it falls by $2.7\times$ over the delay (to $1.86$ by step
+  1{,}500) before collapsing to ${\sim}10^{-2}$ at the transition, the same
+  steady improvement underneath the delay that
+  Section~\ref{sec:progress} measures.}
   \label{fig:loss}
 \end{figure}
 
@@ -134,11 +146,43 @@ Section~\ref{sec:surface} grid, which is three.}
 \subsection{Weight decay}
 \label{sec:wd}
 
-\outline{Day 19. README \S1. The wd sweep and what it establishes: whether
-grokking happens at all, and when. Report medians with min--max over five
-seeds. Carry over the Day-17 correction explicitly --- the claim ``$wd = 0$
-never groks'' is a statement about the 30\% row, not about the method, and
-Section~\ref{sec:surface} is where that is shown.}
+The first question is whether the delay is a property of the task or of the
+regularizer. Table~\ref{tab:wd} sweeps weight decay at 30\% training data,
+five seeds per arm, holding everything else at the main configuration.
+
+\begin{table}[h]
+  \centering
+  \caption{Weight decay at 30\% training data, five seeds per arm. Every seed
+  of every arm memorizes at step 100; what changes is whether and when test
+  accuracy reaches 99\%.}
+  \label{tab:wd}
+  \begin{tabular}{lccc}
+    \toprule
+    weight decay & memorized & grokked, median [min--max] & final test acc. \\
+    \midrule
+    $0.0$ & 100 & never (25k budget, 5/5 seeds) & 0.29--0.42 \\
+    $0.1$ & 100 & 10{,}800 [7{,}600--13{,}900]  & $\ge 0.999$ \\
+    $1.0$ & 100 & 1{,}300 [1{,}200--1{,}900]    & $1.000$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Three things follow, and only the first is about the size of the effect. The
+arms are separated by far more than their own spread: the slowest $wd = 1$ seed
+groks at 1{,}900 and the fastest $wd = 0.1$ seed at 7{,}600, so no relabelling
+of seeds within the sweep could reorder the arms. The unregularized control
+memorizes exactly as fast and then stays memorized, ending at 0.29--0.42 test
+accuracy --- some implicit regularization, no transition. And after step
+${\sim}100$ the training loss is already near zero, so almost everything that
+happens to test accuracy afterwards happens under the norm-pressure term rather
+than under the task gradient.
+
+The scope of the middle claim needs stating carefully, because this sweep
+cannot establish it. ``$wd = 0$ never groks'' is measured \emph{at 30\% data}.
+Section~\ref{sec:surface} runs the same control at 40\% and it groks in all
+three seeds, so the sentence is a statement about that row and not about the
+method. A one-variable-at-a-time design cannot tell those apart, which is the
+reason the grid in Section~\ref{sec:surface} exists.
 
 \begin{figure}[t]
   \centering
@@ -154,7 +198,35 @@ Section~\ref{sec:surface} is where that is shown.}
 \subsection{Data fraction}
 \label{sec:frac}
 
-\outline{Day 19. README \S2: less data, longer delay, five seeds per cell.}
+The complementary sweep holds $wd = 1$ and varies how much of the
+$97 \times 97$ table the network is trained on (Table~\ref{tab:frac}). The
+delay grows as the data shrinks, monotonically in the medians and roughly
+log-linearly.
+
+\begin{table}[h]
+  \centering
+  \caption{Training fraction at $wd = 1$, five seeds per cell except the 60\%
+  context point, which is one seed and carries no spread for that reason.}
+  \label{tab:frac}
+  \begin{tabular}{lcc}
+    \toprule
+    train fraction & grok step, median [min--max] & delay over memorization \\
+    \midrule
+    25\% & 2{,}700 [2{,}000--3{,}100] & $27\times$ \\
+    30\% & 1{,}300 [1{,}200--1{,}900] & $13\times$ \\
+    40\% & 300 [300--700]             & $3\times$  \\
+    60\% & 200 (1 seed)               & $2\times$  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The mechanism the numbers are consistent with: as the training set shrinks,
+memorizing it gets cheaper (there are fewer pairs to store) while the general
+circuit's cost is fixed, so the phase in which memorization is the better deal
+stretches. At 60\% the delay has essentially vanished and what is left is
+ordinary learning --- grokking here is a small-data phenomenon. Whether the two
+knobs of this section trade off is the next subsection's question, and it is
+not answerable from these two slices.
 
 \begin{figure}[t]
   \centering
@@ -171,19 +243,90 @@ Section~\ref{sec:surface} is where that is shown.}
 \subsection{Do they trade off? The $wd \times \mathrm{frac}$ surface}
 \label{sec:surface}
 
-\outline{Day 19, and this is the subsection that needs the most care because
-its interesting half is a \emph{negative}. Two results, and they must not be
-run together. (i) Data substitutes for weight decay: at $wd = 0$, fraction
-0.25 and 0.30 never grok inside the 25k-step budget (3/3 seeds each) while
-0.40 groks in all three. (ii) The apparent \emph{interaction} does not
-survive its own error bars: a log-additive null fits the nine uncensored cells
-to 1.24$\times$ rms against seed spreads of 1.15--16.5$\times$, the three
-censored cells look like a refutation, and refitting at the corners of the
-open cells' observed seed ranges gives envelopes that all straddle 1. Say so.
-Also explain the censoring convention here rather than in a footnote:
-non-grokking cells are right-censored at the budget, sorted to $+\infty$ for
-the median, and hatched rather than coloured in the heatmap so no gradient can
-be read across them.}
+Both preceding sweeps are monotone, and both are consistent with a story
+neither can test: that the two knobs trade off, so enough data would buy
+grokking at a weight decay that cannot produce it alone. Reading a trade-off
+off two orthogonal slices is exactly the inference a one-variable-at-a-time
+design invites and cannot support. Table~\ref{tab:surface} is the
+$4 \times 3$ grid that tests it, three seeds per cell.
+
+\begin{table}[h]
+  \centering
+  \caption{Median grok step over three seeds, [min--max]. ``$> 25{,}000$''
+  marks a cell whose median is right-censored at the budget.}
+  \label{tab:surface}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{lcccc}
+    \toprule
+    train frac & $wd = 0$ & $wd = 0.1$ & $wd = 0.3$ & $wd = 1$ \\
+    \midrule
+    25\% & $> 25{,}000$ & $> 25{,}000$          & 10{,}700 [8{,}300--12{,}400] & 3{,}100 [2{,}700--3{,}100] \\
+    30\% & $> 25{,}000$ & 10{,}800 [9{,}200--13{,}900] & 4{,}900 [4{,}100--5{,}300] & 1{,}300 [1{,}200--1{,}900] \\
+    40\% & 2{,}100 [600--9{,}900] & 1{,}400 [500--3{,}400] & 700 [400--1{,}800] & 500 [300--700] \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{The censoring convention.} A cell whose seeds never generalize
+inside the budget has not produced a large number; it has produced \emph{no}
+number, bounded below by 25{,}000. Both tempting alternatives are silently
+wrong: dropping such cells biases the surface toward the fast corner, and
+imputing the budget invents a measurement. What is done instead is the standard
+right-censored treatment. A cell's seeds are sorted with the censored ones at
+$+\infty$, which leaves the median \emph{exact} whenever fewer than half of
+them are censored and reports a lower bound otherwise; the heatmap hatches
+those cells rather than colouring them, so no gradient can be read across a
+region where no gradient was measured. Two of the three censored cells here
+have 3/3 seeds censored; the $(25\%, wd\,{=}\,0.1)$ cell has 2/3, with its
+one open seed at 23{,}100, which is enough to censor the median and not enough
+to identify it.
+
+\paragraph{Data substitutes for weight decay.} Down the $wd = 0$ column, 25\%
+and 30\% never grok --- 3 of 3 seeds each, at the full budget --- and 40\%
+groks in all three, median 2{,}100, ending at test accuracy 0.9993, 0.9996 and
+0.9998. So Section~\ref{sec:wd}'s control is not a fact about $wd = 0$: with
+40\% of the addition table the network gets there with no explicit regularizer
+at all. This is a claim about which cells produced a number and which produced
+none, so no seed spread and no fit can move it.
+
+\paragraph{But trading off is not interacting, and the interaction is not
+there.} In logs the no-interaction null is additive,
+$\log_{10} T = \mu + a_{\text{frac}} + b_{wd}$ --- changing $wd$ multiplies
+the delay by the same factor at every fraction. Fitted over the nine cells with
+an identified median (3 residual degrees of freedom) it holds well: rms
+residual $1.24\times$, worst cell $1.51\times$, against within-cell seed
+spreads of $1.15\times$ to $16.50\times$. The fitted effects are two
+independent multipliers, $2.81 / 1.36 / 0.26$ for the fractions and
+$2.09 / 1.69 / 0.86 / 0.33$ for the weight decays.
+
+The censored cells look like they refute that, and the check that kills the
+refutation is worth stating because the refutation is the more interesting
+claim. A censored cell carries a real inequality the least-squares fit cannot
+use: the null predicts 22{,}565 / 18{,}327 / 10{,}915 steps for
+$(25\%, 0)$, $(25\%, 0.1)$ and $(30\%, 0)$, and all three medians are bounded
+below by 25{,}000 --- bound ratios of $1.11\times$, $1.36\times$ and
+$2.29\times$, the last apparently well outside the fit's own $1.51\times$
+worst case. But the $wd = 0$ column effect rests on the \emph{single} open
+cell in that column, whose three seeds span $16.5\times$. Refitting at the
+corners of the open cells' observed seed ranges gives envelopes of
+$[0.11, 9.95]$, $[0.51, 4.65]$ and $[0.19, 18.99]$, every one of which
+straddles~1. The censoring is consistent with pure multiplicative
+independence: the $wd = 0$ column is simply slow enough that 25\% and 30\%
+fall past the budget and 40\% does not. There is no cliff here, only the edge
+of the compute.
+
+So the summary is the weaker and more useful one: data substitutes for weight
+decay, multiplicatively, with no synergy detectable at this resolution. Three
+seeds per cell is also worth reading as a limit rather than a sample --- the
+exact test of Section~\ref{sec:seeds} has a two-sided floor of
+$2/\binom{6}{3} = 0.10$ at three versus three, so this grid ranks cells and
+compares steps against spreads but certifies no pairwise comparison at the
+level Section~\ref{sec:heads} reaches. The 40\% row in particular
+\emph{looks} flatter than the rows above ($1.4\times$ across
+$wd\,{=}\,0.3 \to 1$ against $3.45\times$ and $3.77\times$), which would be
+an interaction, but its seed spreads there are $2.33\times$ and $4.50\times$,
+so the flattening is inside the noise and is not claimed.
 
 \begin{figure}[t]
   \centering
@@ -201,12 +344,46 @@ be read across them.}
 \subsection{Controls: learning rate, regularizer, modulus}
 \label{sec:controls-arms}
 
-\outline{Day 19. Three arms whose job is to rule things out rather than to
-show something. README \S3 (a $10\times$ learning-rate change leaves the
-phenomenon intact), \S6 (dropout as an alternative regularizer --- is it the
-norm specifically or any regularizer?), and \S4 (the delay does not grow with
-the modulus; data size is the variable that matters, and this is a table, not
-a figure).}
+Three arms whose job is to rule things out rather than to show something. Each
+is one seed per cell, so they are stated as directions and not as effect sizes.
+
+\paragraph{Learning rate.} Rerunning the main configuration across a
+$10\times$ range of learning rates leaves the phenomenon intact and moves the
+grok step roughly inversely: 5{,}500 / 1{,}700 / 800 steps at
+$3\times10^{-4}$ / $10^{-3}$ / $3\times10^{-3}$ (Figure~\ref{fig:lr}).
+Memorization is already near-instant at all three, so the delay
+\emph{multiple} shrinks as the learning rate grows without vanishing. The
+consequence for everything else here is that grok steps are comparable only at
+fixed learning rate --- all other sweeps hold $10^{-3}$ --- and that
+``1{,}300 steps'' is a property of the optimizer schedule as much as of the
+task.
+
+\paragraph{Regularizer.} Section~\ref{sec:wd} shows weight decay driving the
+transition, and the norm-based account of \citet{liu2023omnigrok} makes norm
+reduction the mechanism. That invites the control of swapping weight decay for
+dropout, which does not target the norm at all. Dropout $0.1$ at $wd = 0$
+groks, at step 3{,}500, to final test accuracy $0.999$
+(Figure~\ref{fig:dropout}). So it is not weight decay specifically that is
+required --- but the route is visibly different: under dropout the parameter
+norm \emph{rises} monotonically throughout, $21 \to 55$, while the $wd = 1$
+run generalizes with the norm coming down. Norm reduction is sufficient here
+and not necessary. What the two share, and what the unregularized run lacks, is
+pressure against the pure-memorization solution rather than any particular way
+of applying it.
+
+\paragraph{Modulus.} Repeating the main configuration at $p = 113$ changes two
+things at once: more residue classes for the circuit to represent, and --- at a
+fixed 30\% fraction --- more absolute training pairs, 3{,}831 against 2{,}823.
+The larger modulus groks \emph{sooner}, at step 600 against 1{,}900, so
+time-to-grok is not a clean increasing function of $p$ and the data-quantity
+effect wins on this axis. This is the same lever as Section~\ref{sec:frac}.
+One thing this arm does \emph{not} show, though an earlier version of it
+claimed to: that the transition is ``softer'' at the larger modulus. Its test
+accuracy at memorization is $0.288$, and the five $p = 97$ seeds span
+$0.163$--$0.302$ on that statistic, so the $p = 113$ run sits inside the range
+of the modulus it was being contrasted with. What looked like a difference was
+one seed against one seed, and the $p = 97$ seed chosen was the lowest of the
+five.
 
 \begin{figure}[t]
   \centering
@@ -233,11 +410,26 @@ a figure).}
 \subsection{Where the norm pressure has to act}
 \label{sec:scope}
 
-\outline{Day 19. README \S7, and one of the results least covered elsewhere:
-applying the decay to the embeddings only, versus everything but the
-embeddings, versus all parameters. The readout circuit is where the pressure
-has to be. Related to \citet{liu2023omnigrok}'s norm account and worth citing
-against it.}
+``The weight norm'' is the norm of every parameter, so the previous subsection
+leaves a question it cannot answer: does the decay need to act on the
+\emph{embeddings}, where the Fourier structure of Section~\ref{sec:fourier}
+lives, or on the rest of the network, which reads that structure out? This
+ablation holds the main configuration fixed and changes only which parameters
+the decay is applied to; the untargeted group trains at $wd = 0$.
+
+The answer is unambiguous, and it is the readout circuit
+(Figure~\ref{fig:scope}). Decaying the non-embedding parameters alone
+reproduces the full-decay run almost exactly --- grok step 1{,}800 against
+1{,}900, with the two accuracy curves overlapping. Decaying only the
+embeddings does essentially nothing: the model never groks in 15{,}000 steps
+and ends at $0.36$ test accuracy, while the rest of the network, now
+unconstrained, keeps its large memorization weights and the total norm climbs
+from $21$ to $287$ against the $20$--$40$ the two grokking runs hold. So the
+embeddings supply the Fourier basis but their \emph{scale} is not what
+memorization exploits, and pinning it is neither sufficient nor the operative
+lever. Read against \citet{liu2023omnigrok}, this locates the norm effect
+rather than contradicting it: the quantity that matters is not
+$\lVert\theta\rVert$ over the whole network.
 
 \begin{figure}[t]
   \centering
@@ -256,11 +448,42 @@ against it.}
 \subsection{Norm and Fourier structure}
 \label{sec:fourier}
 
-\outline{Day 19. README \S5. The weight-norm trajectory and the emergence of a
-sparse set of frequencies in the embeddings, memorization checkpoint versus
-final checkpoint. Carry the Day-17 correction: the rise-then-fall in weight
-norm is a \emph{weight-decay} signature, not a grokking one --- the $wd = 0$
-runs that do generalize show 0.00\% maximum drawdown.}
+Two measurements on the main run, one along the trajectory and one between its
+two committed checkpoints.
+
+The parameter norm rises while the task gradient dominates, peaks around the
+transition, and falls afterwards once the training loss is pinned near zero and
+the decay is the only force left (Figure~\ref{fig:main}, right). It is
+tempting to read that shape as the signature of grokking, and it is not:
+Section~\ref{sec:surface}'s $wd = 0$ runs at 40\% data reach
+${\sim}0.999$ test accuracy with a norm that never once falls below its running
+peak --- maximum drawdown $0.00\%$ across every eval of all three seeds,
+ending at $722$, $76$ and $32$ from an initial $21.7$ --- while the $wd = 1$
+runs fall 7--23\% from their peak. The rise-then-fall belongs to the
+weight-decay-driven transition, not to the transition as such. A network can
+grok with a monotonically growing norm.
+
+The embedding spectrum is the algorithm's fingerprint and it moves the way the
+circuit story requires (Figure~\ref{fig:spectrum}). At memorization the
+spectral energy is spread across all 48 frequencies; afterwards a handful
+dominate. On the published run the top-5 share goes $13.6\% \to 56.7\%$, but
+that pair is the largest contrast the five seeds contain and
+Section~\ref{sec:seeds} explains why; the five-seed figures are
+$15.4\%$ [$13.6$--$16.5$] $\to 41.4\%$ [$29.2$--$56.7$]. \emph{Which}
+frequencies is seed-specific --- every seed picks a different handful --- so
+what is portable is the count: reaching 90\% of the embedding energy takes
+$42.2$ [$42$--$43$] of the 48 frequencies at memorization and $20.0$
+[$11$--$28$] afterwards, in every seed. The geometric face of the same
+sparsification is Figure~\ref{fig:circle}, where the embeddings projected on
+the dominant frequency's plane tighten onto a ring (radial coefficient of
+variation $0.343 \to 0.130$, complete separation across seeds).
+
+One statistic in that figure is a noise floor rather than a measurement, and it
+takes a baseline to see it. Unstructured Gaussian embeddings read a radial CV
+of $0.428$ and put $4.0\%$ of their variance in the best of the 48 planes ---
+$4.0\%$ rather than the naive $2/d_{\text{model}} = 1.6\%$ because choosing
+the best of 48 inflates it. The memorization checkpoint reads $4.3\%$, i.e.\
+exactly that floor, so only the radial CV carries anything there.
 
 \begin{figure}[t]
   \centering
@@ -287,13 +510,43 @@ runs that do generalize show 0.00\% maximum drawdown.}
 \subsection{The generalizing solution is a sparse sum over frequencies}
 \label{sec:attribution}
 
-\outline{Day 19. README \S8, the logit-attribution result and the one number
-from it that matters most for the paper's argument: restricting the
-\emph{memorizing} model's logits to the $a+b$ subspace already recovers
-accuracy well above what the raw model scores, so the circuit is forming
-underneath the memorization before the test accuracy moves. Seed-0 values are
-in the figure; the five-seed values are in Section~\ref{sec:seeds} and are the
-ones to quote.}
+The previous subsection reads the weights. This one reads the model's output.
+If the network has learned the algorithm its logits should depend on $a + b$
+and be built from few frequencies --- the angle-addition circuit
+$\text{logit}(a,b,c) \approx \sum_k A_k \cos\!\big(\tfrac{2\pi k}{p}
+(a + b - c)\big)$. Both are directly measurable: 2D-Fourier-transform the
+logit tensor $L[a,b,c]$ over the two input axes, where a function of $a+b$ puts
+all its energy on the diagonal $k_a = k_b$.
+
+Over five seeds, the share of logit energy on that diagonal goes
+$0.192$ [$0.123$--$0.240$] at memorization to $0.975$ [$0.949$--$0.984$] after
+grokking, with complete separation. The reference those percentages need is
+that unstructured logits put $2 \cdot 48 / (p^2 - 1) = 1.0\%$ of their energy
+on the diagonal, not zero --- so memorization's $19\%$ is already
+$19\times$ chance, which is the next paragraph's point, and the grokked model
+is near the ceiling. Keeping only the top-$m$ diagonal frequencies and
+inverse-transforming rebuilds the logits from just those frequencies, a static
+version of \citet{nanda2023progress}'s restricted loss; three frequencies
+recover $0.971$ [$0.928$--$1.000$] of test accuracy and it takes 3 to 5 (mean
+$3.8$) to clear $0.99$. ``A handful'' is the portable statement; ``three'' is
+seed 0's.
+
+The number that matters most for the argument is what the same restriction does
+to the \emph{memorizing} checkpoint. Projecting its logits onto the clean
+$a+b$ subspace recovers far more test accuracy than the raw memorizing model
+expresses: $0.817$ [$0.774$--$0.880$] with ten frequencies kept, against the
+model's own $0.247$ [$0.163$--$0.303$], with every seed's projection above
+every seed's raw accuracy. The generalizing circuit is already present,
+drowned out by per-pair memorization, before the test accuracy moves. This is
+one of the few claims here that got \emph{stronger} when it was averaged.
+
+One reading offered by an earlier version of this analysis does not survive.
+The dominant logit frequencies do overlap the dominant embedding frequencies
+well above chance ($3.0$ of 5 against $0.52$ expected), which was presented as
+evidence that the logits are written in the basis the embeddings carry. But the
+same overlap is $3.4$ of 5 \emph{at memorization}: it does not separate the
+checkpoints ($p = 0.76$) and so cannot be evidence about the transition. It is
+a fact about the architecture.
 
 \begin{figure}[t]
   \centering
@@ -311,10 +564,49 @@ ones to quote.}
 \subsection{Progress measures}
 \label{sec:progress}
 
-\outline{Day 19. README \S10: the circuit forms gradually and the read-outs
-move before the accuracy does. Relate to \citet{nanda2023progress} explicitly,
-including where this reproduction agrees with theirs and where the setup
-differs.}
+Sections~\ref{sec:fourier} and~\ref{sec:attribution} read two checkpoints.
+This one makes the same quantities a trajectory, by rerunning the main
+configuration with per-eval instrumentation. The key $a+b$ frequencies are read
+off the \emph{final} model and held fixed along the trajectory, so what is
+tracked is one circuit forming rather than a moving target, and both loss
+measures are computed over all $p^2$ pairs, which decouples them from the
+train/test split. Following \citet{nanda2023progress}: the \emph{restricted}
+loss keeps only those five frequencies of $a+b$, the \emph{excluded} loss
+removes exactly those five and keeps everything else.
+
+The circuit is legible in the loss before it is legible in the accuracy. At the
+memorization point the full model's test loss is $5.03$ while the restricted
+loss is $4.10$ --- projecting onto five frequencies is already ${\sim}0.9$
+nats better than the whole memorizing model. That is the reproduction of
+\citet{nanda2023progress}'s central observation, and it holds here through
+step 1{,}000.
+
+It does not hold all the way to the jump, and the difference is worth stating
+because the tidier version of this sentence is the one that suggests itself.
+Both losses fall through the delay, and the full model overtakes the restricted
+one at step 1{,}100 --- $3.29$ against $3.31$ --- some 500 steps before the
+accuracy jump at 1{,}600. Relatedly, the test accuracy underneath all of this
+is not flat: it climbs from $0.163$ at memorization to $0.527$ at step
+1{,}500, rising at every eval but one, and then jumps to $0.998$ by 1{,}900.
+What is sudden is the crossing of the 99\% threshold that \emph{defines} the
+grok step, not the model's improvement. That is a difference of setup rather
+than of substance from \citet{nanda2023progress} --- a different modulus,
+architecture size and optimizer will put the accuracy plateau at a different
+height --- but it is the reason this paper describes a delay rather than a
+plateau.
+
+The other two read-outs behave as the picture predicts. Embedding structure
+rises gradually, from $14\%$ of the spectral energy in its top five
+frequencies at memorization to ${\sim}47\%$ by the end of the instrumented
+run. It does begin to climb before the accuracy step, but ``begins to climb''
+is true of almost any rising quantity and is not the useful measurement:
+counted from its memorization value to the run's maximum, and generously (its
+highest pre-jump reading, $0.181$ at step 900, against $0.136$ and $0.477$),
+only $13\%$ of the rise precedes the accuracy jump, with the rest arriving at
+and after it. And the model genuinely depends on those frequencies: after
+grokking the full test loss reaches ${\sim}10^{-2}$ while the excluded loss
+holds a median of $0.97$, so removing five of 48 frequencies collapses the
+solution.
 
 \begin{figure}[t]
   \centering
@@ -322,19 +614,51 @@ differs.}
   \caption{Progress measures against step, seed~0, with the grok step
   marked. \emph{Left:} full-model test loss against the loss of the model
   restricted to five $a+b$ frequencies and the loss with those frequencies
-  removed. \emph{Right:} top-5 embedding energy fraction against test
-  accuracy on a shared $x$ axis. Both read-outs move well before the accuracy
-  does.}
+  removed --- the restricted loss starts $0.9$ nats ahead and is overtaken at
+  step 1{,}100, before the jump. \emph{Right:} top-5 embedding energy fraction
+  against test accuracy on a shared $x$ axis; $13\%$ of that read-out's rise
+  precedes the accuracy jump and the rest follows it. Both panel titles carry
+  their number, computed from the plotted series rather than asserted.}
   \label{fig:progress}
 \end{figure}
 
 \subsection{Attention}
 \label{sec:attention}
 
-\outline{Day 19. README appendix. The attention pattern before and after, and
-the entropy trajectory. Keep this short: Section~\ref{sec:seeds} finds the
-attention read-outs converge to the same place in every arm, so their role in
-the paper is as a null, not as a finding.}
+The ``='' position, where the answer is written, spends nearly all its
+attention on the two operand positions at both checkpoints. What grokking
+changes is the \emph{symmetry} of that read: the per-head asymmetry
+$\lvert A_{=\to a} - A_{=\to b}\rvert$ falls $0.119 \to 0.0040$ over five
+seeds with complete separation, matching the commutativity the general
+algorithm has to respect (Figures~\ref{fig:attnpattern}
+and~\ref{fig:attnentropy}).
+
+Two features of the trajectory are worth more than the endpoints. A randomly
+initialized model is \emph{already} at the algorithmic symmetry --- operand
+entropy $\ln 2$ exactly, since a near-uniform softmax is commutative for free.
+Memorization destroys it, driving the per-head asymmetry from $0.004$ at
+initialization to $0.189$ at the memorization checkpoint --- both on the
+instrumented run, which is why the second is seed 0's value rather than the
+$0.119$ five-seed mean above --- and grokking puts it back. The model does not learn commutativity so
+much as recover it. And the read-out is a \emph{lagging} indicator: the
+symmetry is restored at step 2{,}300, after test accuracy passes $0.5$ at
+1{,}500 and after the grok step at 1{,}900. Unlike the restricted loss of
+Section~\ref{sec:progress} it is no early warning.
+
+Read through the usual ``attention sharpens'' lens the entropy trajectory is
+misleading twice over. Entropy \emph{rises} through grokking, $0.677 \to
+0.935$, partly because an even operand split is correct rather than sloppy
+under commutativity, and partly because a self-attention channel opens after
+the jump. That channel carries no information --- position 2 is the ``='' token
+in every example, so the value vector the ``='' query pulls from itself has an
+across-batch standard deviation of exactly zero. It is a learned bias, and it
+is what the operand-renormalized entropy divides out. It is also why the
+operand-weight statistic is the one read-out here that does not separate the
+checkpoints cleanly (Section~\ref{sec:seeds}).
+
+Beyond that, these read-outs earn their place in this paper as a null rather
+than as a finding: Section~\ref{sec:heads} shows every head-count arm reaching
+the same values.
 
 \begin{figure}[t]
   \centering
@@ -360,17 +684,79 @@ the paper is as a null, not as a finding.}
 \subsection{Are the mechanistic numbers typical?}
 \label{sec:seeds}
 
-\outline{Day 19, and this is the section that earns the paper the right to
-quote the rest. README \S12: every mechanistic read-out re-measured over five
-seeds. Twelve of thirteen separate memorization from generalization completely
-at $p = 0.008$, which is the \emph{floor} for five versus five --- so the
-rank-sum helper reports $\min p = 1/\binom{n+m}{n}$ beside the $p$-value and
-``not significant'' can be told from ``cannot be significant at this sample
-size''. Then the honest half: on 8 of 13 read-outs seed~0 held the extreme in
-the flattering direction, and the cause is a budget mismatch, not a lucky seed
---- seed~0's run was extended to 11,100 steps where the others early-stop at
-1,800--2,100, and the seven read-outs where it is an outlier are the seven that
-further consolidation would move.}
+Everything above that reads structure out of weights was, until this section,
+measured on one run's two checkpoints, because seed 0 is the run whose weights
+the repository commits. That is thirteen read-outs from one pair of files.
+Here they are all re-measured across the five main-configuration seeds and
+tested with an exact two-sample rank-sum permutation test, enumerating all
+$\binom{10}{5} = 252$ relabelings rather than approximating.
+
+\paragraph{The qualitative story survives everywhere.} Twelve of the thirteen
+read-outs separate memorization from generalization \emph{completely} --- no
+memorization checkpoint on the wrong side of any final one --- which at five
+seeds per arm produces $p = 0.008$. That is the floor: the smallest two-sided
+$p$ the test can return at this sample size is $2/\binom{10}{5} = 0.0079$, so
+complete separation is exactly what it takes to reach it and nothing at five
+versus five can do better. The test reports that floor beside the $p$-value
+precisely so ``not significant'' can be distinguished from ``cannot be
+significant at this sample size'', a distinction five seeds per arm forces
+constantly. The one read-out that does not separate cleanly is the ``=''
+token's operand weight ($p = 0.032$): two grokked runs keep more operand weight
+than the least concentrated memorizing one, and one seed moves it the wrong way
+entirely ($0.960 \to 0.966$). The self-attention channel of
+Section~\ref{sec:attention} predicts exactly that instability, so the finding
+is that the \emph{size} of that fall was never measurable from one run.
+
+\paragraph{The published numbers do not survive, and they fail in one
+direction.} Seed 0 holds the extreme in the flattering direction on 8 of the 13
+read-outs and lies outside the other four's entire range on 7, so nearly every
+contrast quoted from it is the largest one the five seeds contain
+(Table~\ref{tab:seed0}).
+
+\begin{table}[h]
+  \centering
+  \caption{Contrasts as the published single run reported them, and as five
+  seeds report them.}
+  \label{tab:seed0}
+  \begin{tabular}{ll}
+    \toprule
+    from seed 0 alone & over five seeds \\
+    \midrule
+    $12\% \to 98\%$ on the $a{+}b$ diagonal & $19\% \to 97.5\%$ \\
+    equivariance defect $0.189 \to 0.00017$ ($1100\times$) & $0.119 \to 0.0042$ ($28\times$) \\
+    top-5 embedding share $13.6\% \to 56.7\%$ & $15.4\% \to 41.4\%$ \\
+    three frequencies rebuild 100\% & 3--5 frequencies; three give $0.97$ \\
+    operand weight $99.7\% \to 83.7\%$ & $98.1\% \to 90.9\%$, ranges overlapping \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{It is not a lucky seed, and that is the more useful answer.} The
+five runs are not the same length. Seed 0 was deliberately extended to 11{,}100
+steps --- Section~\ref{sec:fourier}'s norm decline is only visible in a run
+that continues past the jump --- while the other four early-stop on patience at
+1{,}800--2{,}100. So its final checkpoint has ${\sim}9{,}000$ more steps of
+weight decay after grokking than any other, and the same repository's
+trajectory shows the circuit continuing to sparsify over exactly that interval.
+The seven read-outs on which seed 0 is an outlier are the seven that further
+consolidation would move: the sparsity of the embedding spectrum, the ring's
+variance share, and all three symmetry defects. With one long run there is no
+way to separate ``lucky seed'' from ``trained longer'', so the honest move is
+to drop it: rerunning every test on seeds 1--4 alone, where four per arm still
+permits complete separation at a floor of $2/\binom{8}{4} = 0.029$, leaves 12
+of 13 separating completely, with the same exception now at $p = 0.114$. The
+confound reaches the effect sizes and none of the conclusions. What this study
+cannot say is how much of ``grokking sparsifies the circuit'' is grokking and
+how much is the 9{,}000 steps afterwards; that needs the four short runs
+retrained to a matched budget, which has not been done.
+
+The general lesson is worth separating from this repository's version of it.
+Section~\ref{sec:heads} finds the same seed 0 to be the \emph{slowest} run in
+all three head-count arms, so the single-run timing numbers were uniformly
+pessimistic while the single-run mechanistic numbers are uniformly flattering.
+Those are not the same phenomenon --- the timing spread is seed noise, the
+mechanistic gap traces to a run length chosen by hand --- but a single-run
+table cannot tell you which kind of run it got, in either direction.
 
 \begin{figure}[t]
   \centering
@@ -391,16 +777,63 @@ further consolidation would move.}
 \subsection{Head count}
 \label{sec:heads}
 
-\outline{Day 19. README \S9: one wide head groks sooner than four narrow ones,
-medians 300/700/1300 for 1/2/4 heads at five seeds per arm with complete
-separation ($p = 0.008$, the floor). Two points to make and neither is
-optional: the ordering separates because the within-arm spread
-(1.3--1.6$\times$) is smaller than the between-arm step (2.3$\times$,
-1.9$\times$), which is readable off the table without any test; and the
-\emph{mechanistic} guess that went with this result did not survive --- all
-four attention read-outs reach the same place in every arm and separate no
-pair (smallest $p = 0.056$), so head count changes when the circuit forms, not
-what it converges to.}
+Modular addition has a single known mechanism --- embed each input on a circle,
+add the angles, read off the sum by interference --- and nothing in it
+obviously needs the representation split across heads. Varying only
+\texttt{n\_heads} with $d_{\text{model}}$ pinned at 128, so head width tracks
+the count and the parameter count is identical (223{,}360) in all three arms,
+five seeds each:
+
+\begin{table}[h]
+  \centering
+  \caption{Head count at fixed $d_{\text{model}}$, five seeds per arm. All
+  three arms grok to 100\% in every seed.}
+  \label{tab:heads}
+  \begin{tabular}{lcccc}
+    \toprule
+    \texttt{n\_heads} & $d_{\text{head}}$ & grok step, median [min--max] & seed spread & final test \\
+    \midrule
+    1 & 128 & 300 [300--400]           & $1.3\times$ & $1.000$ \\
+    2 & 64  & 700 [700--900]           & $1.3\times$ & $1.000$ \\
+    4 & 32  & 1{,}300 [1{,}200--1{,}900] & $1.6\times$ & $1.000$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+So grokking on this task does not require multiple heads, and fewer heads grok
+sooner. The ordering separates completely --- no seed of a smaller-head arm is
+slower than any seed of a larger one, in all three pairwise comparisons, so
+every pair sits at $p = 0.008$, the floor of Section~\ref{sec:seeds}'s test.
+Why it separates is readable off the table without any test, and that is the
+more durable form of the statement: the within-arm seed spread
+($1.3$--$1.6\times$) is smaller than the step between arms ($2.33\times$ and
+$1.86\times$ on medians). An ordering is resolvable exactly when that
+inequality holds.
+
+This section is also the clearest case in this study of a single-seed table
+being right about the comparison and wrong about the level. It previously
+reported seed 0 alone, at 400 / 900 / 1{,}900, which are the \emph{maximum} of
+each arm --- seed 0 is the slowest seed at every head count --- so the shipped
+numbers were uniformly pessimistic while the ratios between them
+($2.25\times$, $2.11\times$) survived averaging nearly unchanged
+($2.33\times$, $1.86\times$).
+
+\paragraph{The mechanistic explanation that came with it did not survive.}
+The ordering used to be explained by saying that a one-head circuit lives in a
+single attention pattern while more heads must coordinate the computation
+across a partitioned residual stream. Measuring
+Section~\ref{sec:attention}'s four attention read-outs on all 15 final
+checkpoints says the arms end up in the same place: every arm reaches operand
+entropy $\ln 2 = 0.6931$ to four decimals, and \emph{none} of the four
+read-outs separates any pair of arms under the test that separates every pair
+on grok step (smallest $p$ over the 12 comparisons: $0.056$). So head count
+changes how long the circuit takes to form, not what it converges to, and
+whatever slows the four-head runs is not visible in the endpoint attention.
+Running the test on the null claim is what makes that statable: ``the arms end
+up the same'' is worth asserting only with the same instrument that established
+they differ. One caveat about the statistic rather than the result: it is a
+mean over heads, so the four-head number averages four values where the
+one-head number is one. The means are comparable; the dispersions are not.
 
 \begin{figure}[t]
   \centering
@@ -417,10 +850,81 @@ what it converges to.}
 \subsection{Other operations}
 \label{sec:ops}
 
-\outline{Day 19. README \S11: subtraction and multiplication against addition,
-and the swap-equivariance control that asks whether what is learned is the
-group structure rather than commutativity. The subtraction arm is partly
-censored and must be reported as such.}
+Everything above is $(a+b) \bmod 97$. Two other binary operations on the same
+vocabulary ask whether the delay is about addition or about the group the
+network has to discover. $(a-b) \bmod 97$ is the \emph{same} group,
+$\mathbb{Z}/97$ --- negating the second operand relabels the answer, so the
+circuit of Section~\ref{sec:attribution} transfers unchanged.
+$(a \times b) \bmod 97$ is the interesting one: on the nonzero residues it is
+the cyclic multiplicative group of order $p - 1 = 96$, and the discrete
+logarithm to a primitive root makes it isomorphic to addition mod 96, with the
+$2p - 1 = 193$ pairs involving a zero sitting outside the group as a constant
+the network can only memorize.
+
+\begin{table}[h]
+  \centering
+  \caption{Operations at 30\% data, three seeds per cell. The
+  $(\text{sub}, wd\,{=}\,0.1)$ cell is partly censored: two of its three seeds
+  never grok inside the 25k-step budget, so it is a single run and not a
+  median.}
+  \label{tab:ops}
+  \begin{tabular}{llcc}
+    \toprule
+    operation & answer group & $wd$ & grok step, median [min--max] \\
+    \midrule
+    $(a+b) \bmod 97$      & $\mathbb{Z}/97$        & $1.0$ & 1{,}300 [1{,}200--1{,}900] \\
+    $(a-b) \bmod 97$      & $\mathbb{Z}/97$        & $1.0$ & 3{,}700 [2{,}500--3{,}900] \\
+    $(a\times b) \bmod 97$ & $(\mathbb{Z}/97)^{\times}$ & $1.0$ & 1{,}100 [1{,}000--1{,}500] \\
+    $(a+b) \bmod 97$      & $\mathbb{Z}/97$        & $0.1$ & 10{,}800 [9{,}200--13{,}900] \\
+    $(a-b) \bmod 97$      & $\mathbb{Z}/97$        & $0.1$ & 24{,}800 (1 of 3 seeds) \\
+    $(a\times b) \bmod 97$ & $(\mathbb{Z}/97)^{\times}$ & $0.1$ & 8{,}400 [7{,}900--11{,}900] \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+All three grok at strong weight decay in every seed, each memorizing at step
+100 first, so the delay is not specific to addition. Subtraction is decisively
+the slowest and the seeds agree: at $wd = 1$ its range does not overlap
+addition's or multiplication's at all. At $wd = 0.1$ the difference becomes
+qualitative --- two of three seeds never grok inside the budget (final test
+accuracy $0.148$ and $0.047$) and the third only makes it at step 24{,}800.
+Multiplication, meanwhile, is \emph{not} measurably faster than addition;
+that correction matters because seed 0 alone showed 1{,}000 against 1{,}900 and
+invited a story about the highly composite group order $96 = 2^5 \cdot 3$
+offering more low-order frequencies. With three seeds the medians are 1{,}100
+against 1{,}300 with almost entirely overlapping ranges. The isomorphism
+argument survives as an explanation of why multiplication groks at all; it does
+not survive as an explanation of it grokking sooner.
+
+So the group is not the operative variable: subtraction has the identical group
+to addition and is reliably the hardest of the three. The one structural
+property that distinguishes it is that $a - b$ is the only non-commutative
+operation here --- and Section~\ref{sec:attention} finds that grokking
+symmetrizes how the ``='' position reads the two operands.
+
+\paragraph{Testing that, which needs the right statistic.} Demanding
+$L(a,b) = L(b,a)$ of a subtraction model is demanding that it be wrong, so a
+defect there would show nothing. What $a - b = -(b-a)$ licenses instead is
+\emph{anti}-equivariance: swapping the operands should permute the logit
+vector by $c \mapsto -c \bmod p$. Computing both statistics for both
+operations, each normalized by the logits' own standard deviation and read
+against a shuffle baseline of $1.11$ (the level a defect reads when there is no
+symmetry to find), gives Figure~\ref{fig:swap}: addition's invariance defect
+collapses $0.560 \to 0.010$ while the symmetry it does not have stays pinned
+at the no-symmetry level, and subtraction goes the other way in both columns
+--- its invariance defect \emph{rises} to $1.086$, essentially the baseline,
+while its anti-equivariance defect falls $1.034 \to 0.271$.
+
+Grokking does not buy commutativity. It buys whichever swap symmetry the
+operation actually has. Two things that do not fit that clean statement belong
+with it rather than in a footnote. Subtraction acquires its symmetry far less
+completely --- $0.271$ against addition's $0.010$ is $27\times$, and its seed
+spread ($0.15$--$0.51$) says it is not a stable quantity, which is at least
+consistent with subtraction being the slowest of the three though it does not
+show that it is why. And at $wd = 0.1$ only one subtraction seed generalized at
+all, so that cell is a single run: its anti-equivariance defect is $0.553$
+while the two failed seeds sit at $0.86$ and $0.97$, near the no-symmetry
+level, which is what a run that never found the structure should look like.
 
 \begin{figure}[t]
   \centering
