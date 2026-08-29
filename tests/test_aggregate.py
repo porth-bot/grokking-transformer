@@ -108,6 +108,33 @@ def test_complete_separation_of_five_versus_five_hits_the_resolution_floor():
     assert r["p_two_sided"] == pytest.approx(2 / 252)
 
 
+def test_the_two_floors_bound_the_p_values_they_belong_to():
+    """The floors differ by a factor of two, and mixing them up is a check
+    that never fires.
+
+    Every caller here quotes ``p_two_sided`` (README Secs. 9, 12 and the paper
+    all say "p = 0.008, the floor at five vs five"), so a caller testing
+    ``p_two_sided == min_p`` would be asking whether 0.0079 equals 0.0040 and
+    would conclude that complete separation is somehow above the floor.
+    """
+    r = rank_sum_test([300, 300, 300, 300, 400], [700, 700, 700, 700, 900])
+    assert r["min_p_two_sided"] == pytest.approx(2 / 252)
+    assert r["p_two_sided"] == pytest.approx(r["min_p_two_sided"])
+    assert r["min_p_two_sided"] == pytest.approx(2 * r["min_p"])
+
+    # Three vs three: the floor is 2/C(6,3) = 0.10, so nothing on Sec. 13's
+    # grid can reach Sec. 9's 0.008 however cleanly its cells separate.
+    r3 = rank_sum_test([1, 2, 3], [4, 5, 6])
+    assert r3["min_p"] == pytest.approx(1 / 20)
+    assert r3["min_p_two_sided"] == pytest.approx(2 / 20)
+    assert r3["p_two_sided"] == pytest.approx(2 / 20)
+
+    # A tiny arm pair where doubling would overshoot 1: the floor is clamped.
+    r1 = rank_sum_test([1.0], [2.0])
+    assert r1["min_p"] == pytest.approx(1 / 2)
+    assert r1["min_p_two_sided"] == 1.0
+
+
 def test_the_null_distribution_is_enumerated_correctly_by_hand():
     """a = [1, 2], b = [3, 4]. The C(4,2) = 6 splits give U = 0, 1, 2, 2, 3, 4,
     so P(U <= 0) = 1/6, P(U >= 0) = 1, two-sided 2/6."""

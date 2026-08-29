@@ -174,8 +174,14 @@ def rank_sum_test(
     split it appears in, with no midrank correction to get wrong.
 
     Returns ``u``, ``superiority``, ``p_less``, ``p_greater``, ``p_two_sided``,
-    and ``min_p`` -- the resolution floor ``1 / C(n+m, n)``, so a caller can
-    tell "not significant" from "cannot be significant at this sample size".
+    and two resolution floors, so a caller can tell "not significant" from
+    "cannot be significant at this sample size". Which floor to compare
+    against depends on which p-value is being read, and they differ by a
+    factor of two: ``min_p = 1 / C(n+m, n)`` bounds ``p_less`` and
+    ``p_greater``, while ``min_p_two_sided = min(1, 2 / C(n+m, n))`` bounds
+    ``p_two_sided`` -- the one every caller in this repo actually quotes.
+    Comparing a two-sided p against ``min_p`` is a check that can never fire:
+    complete separation at five vs five reads 0.0079, not 0.0040.
     """
     from itertools import combinations
     from math import comb
@@ -215,4 +221,5 @@ def rank_sum_test(
         "p_greater": p_greater,
         "p_two_sided": min(1.0, 2.0 * min(p_less, p_greater)),
         "min_p": 1.0 / n_splits,
+        "min_p_two_sided": min(1.0, 2.0 / n_splits),
     }
