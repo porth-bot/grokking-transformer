@@ -3,13 +3,12 @@
 % Build:  ./paper/build.sh        (regenerates figures, then runs tectonic)
 % CI builds this on every push; see .github/workflows/ci.yml, job "paper".
 %
-% STATUS: draft. The results sections (3, 4, 5) are written; the framing
-% sections -- abstract, introduction, setup, related work, limitations,
-% conclusion -- are still \outline{...} blocks, each a plan for prose that is
-% not written yet. The \outlinetrue switch on the next line makes those
-% visible in the PDF (with a DRAFT banner) so an unfinished draft cannot be
-% mistaken for a finished one. Setting \outlinefalse hides them, and the
-% banner and the switch both come out when the last block does.
+% STATUS: draft. Everything is written except the conclusion, which is still
+% an \outline{...} block -- a plan for prose that is not written yet. The
+% \outlinetrue switch on the next line makes it visible in the PDF (with a
+% DRAFT banner) so an unfinished draft cannot be mistaken for a finished one.
+% Setting \outlinefalse hides it, and the banner, the switch and the macro
+% all come out when that last block does.
 %
 % Figures come from paper/figures/*.pdf, which is NOT committed: it is
 % regenerated from the committed logs by experiments/paper_figures.py before
@@ -46,8 +45,8 @@
 \newcommand{\draftbanner}{%
   \ifoutline
     \begin{center}\small\color{red!60!black}
-    \textsf{DRAFT --- section skeleton and figures only; the prose marked
-    \textbf{[outline]} is not written yet.}
+    \textsf{DRAFT --- everything is written except the conclusion, which is
+    still the plan marked \textbf{[outline]} rather than prose.}
     \end{center}
   \fi}
 % ---------------------------------------------------------------------------
@@ -63,32 +62,112 @@
 \draftbanner
 
 \begin{abstract}
-\outline{Written on Day 20 with the framing sections, once the results
-sections have fixed which numbers are the headline ones. It has to say: a
-one-layer decoder-only transformer trained full-batch on 30\% of
-$(a+b) \bmod 97$ reaches 100\% train accuracy at step ${\sim}100$ and stays
-far below it on test for ${\sim}1{,}300$ steps (median over five seeds) ---
-climbing, not flat, and not near chance: $0.247$ [$0.163$--$0.302$] at
-memorization against $1/97$ --- before jumping to 100\%; what moves that delay (weight decay, data fraction, and
-whether the two trade off); where in the network the norm pressure has to act;
-and what the circuit looks like on either side of the jump, with the
-mechanistic read-outs measured over five seeds rather than shown on one. It
-must also say plainly that the phenomenon is a reproduction of
-\citet{power2022grokking} and the Fourier circuit a reproduction of
-\citet{nanda2023progress} --- see the note in Section~\ref{sec:related}.}
+A one-layer decoder-only transformer trained full-batch on 30\% of the
+$(a+b) \bmod 97$ table reaches 100\% training accuracy at step 100 and does not
+reach 99\% test accuracy for another 1{,}300 steps (median over five seeds).
+The phenomenon is \citet{power2022grokking}'s and the Fourier circuit found
+inside it is \citet{nanda2023progress}'s; both are reproduced here from a
+hand-written implementation, and nothing in this write-up is a new phenomenon.
+What it adds is controls and error bars. Weight decay and training fraction
+each change the median delay by about a factor of nine across the range swept,
+with one end of the weight-decay sweep not grokking at all, and a
+$4 \times 3$ grid says they multiply with no interaction detectable at three
+seeds per cell --- including the finding that 40\% of the table groks with no
+explicit regularizer at all, so ``$wd = 0$ never groks'' was a statement about
+the 30\% row. Swapping weight decay for dropout also groks, with the parameter
+norm rising rather than falling, and restricting the decay to the embeddings
+alone never groks while restricting it to everything else reproduces the full
+run. The delay is not a plateau: test accuracy at memorization is
+$0.247$ [$0.163$--$0.302$] over five seeds against a chance level of
+$1/97 = 0.0103$, and it climbs at nearly every evaluation before the jump.
+Thirteen mechanistic read-outs, previously reported from the single run whose
+checkpoints the repository commits, are re-measured over five seeds with an
+exact rank-sum test: twelve separate memorization from generalization
+completely, at the $p = 0.008$ floor the sample size imposes, while the
+published effect sizes turn out to be the largest the five seeds contain
+because that run was trained five to six times longer than the others.
 \end{abstract}
 
 % ===========================================================================
 \section{Introduction}
 \label{sec:intro}
 
-\outline{Day 20. The setup in one paragraph, the phenomenon in one figure
-(Figure~\ref{fig:main}), and an explicit statement of what this write-up adds
-over the README: nothing about the phenomenon itself, which is known, and
-everything about (a) the controls --- a dropout arm, a weight-decay-scope arm,
-a learning-rate arm, a modulus arm --- and (b) error bars on mechanistic
-read-outs that are usually reported from a single run. Close with the
-contributions list, phrased so that no item claims discovery.}
+A network trained on a small algorithmic dataset can fit its training set long
+before it learns anything that transfers, and then --- with the training loss
+already near zero and nothing obvious left to drive it --- start generalizing.
+\citet{power2022grokking} named this grokking and demonstrated it on modular
+arithmetic; \citet{nanda2023progress} opened the trained network and found a
+Fourier-based angle-addition circuit inside it. This write-up reproduces both
+on $(a + b) \bmod 97$ from an implementation written from scratch, and
+Figure~\ref{fig:main} is the phenomenon: training accuracy saturates at step
+100, test accuracy is still at $0.16$ then, and the run crosses 99\% test
+accuracy at step 1{,}900.
+
+Reproducing a known result is worth doing and is not worth writing up on its
+own, so it is worth being explicit about what this document adds and what it
+does not. It adds nothing about the phenomenon itself. Every mechanism
+described here --- the delay, the circuit, the role of weight decay, the
+progress measures --- is somebody else's, and Section~\ref{sec:related} says
+whose. What it adds is two things that a from-scratch reimplementation is
+unusually well placed to supply, because they cost training runs rather than
+ideas.
+
+The first is \textbf{controls}: arms whose job is to rule an explanation out.
+Sweeping weight decay against training fraction on a grid rather than along two
+axes (Section~\ref{sec:surface}) turns ``$wd = 0$ never groks'' from a property
+of the method into a property of one row, since 40\% of the table groks in
+every seed with no explicit regularizer. Swapping weight decay for dropout
+(Section~\ref{sec:controls-arms}) separates ``norm pressure'' from ``pressure
+against memorizing'': dropout groks too, and its parameter norm rises
+throughout. Restricting which parameters the decay touches
+(Section~\ref{sec:scope}) locates the effect on the readout circuit rather than
+on the embeddings, where the Fourier structure lives. A ten-fold learning-rate
+range and a change of modulus check that the phenomenon is not an artifact of
+one schedule or one $p$.
+
+The second is \textbf{error bars on mechanistic read-outs}, which are usually
+reported from a single run because they are read off committed checkpoints and
+a checkpoint is one run by construction. Section~\ref{sec:seeds} re-measures
+all thirteen of this repository's read-outs across five seeds and tests each
+with an exact rank-sum permutation test. The qualitative story survives
+everywhere it is checked; the published numbers do not, and they fail in one
+direction, for a reason (Section~\ref{sec:seeds}) that is worth more than the
+corrected numbers themselves.
+
+Concretely, this write-up contributes:
+
+\begin{itemize}
+  \item A reproduction of grokking on modular addition in a hand-written
+    one-layer transformer, with attention and LayerNorm implemented rather
+    than imported and checked against PyTorch's reference implementations
+    (Section~\ref{sec:setup}).
+  \item A $4 \times 3$ weight-decay $\times$ data-fraction grid with
+    right-censoring treated as censoring rather than dropped or imputed to the
+    budget, showing that data substitutes for weight decay multiplicatively
+    and that no interaction is detectable at this resolution
+    (Section~\ref{sec:surface}).
+  \item Four controls --- learning rate, regularizer, modulus, and the
+    \emph{scope} of the weight decay --- of which the last two report results
+    that qualify accounts in the literature rather than confirming them
+    (Sections~\ref{sec:controls-arms} and~\ref{sec:scope}).
+  \item Five-seed measurements, with an exact permutation test and its floor
+    reported alongside every $p$-value, for thirteen mechanistic read-outs
+    that this repository previously published from one run
+    (Section~\ref{sec:seeds}).
+  \item Scope checks over head count and over three binary operations,
+    including the observation that the operand-swap symmetry a grokked model
+    acquires is the one its operation actually has, which for $a - b$ is
+    anti-equivariance and not commutativity (Sections~\ref{sec:heads}
+    and~\ref{sec:ops}).
+\end{itemize}
+
+Several claims that this repository had previously published did not survive
+being measured again, and they are reported in place as failures rather than
+quietly corrected: a mechanistic explanation of the head-count ordering
+(Section~\ref{sec:heads}), a story about multiplication grokking sooner
+(Section~\ref{sec:ops}), an embedding/logit frequency overlap presented as
+evidence about the transition (Section~\ref{sec:attribution}), and a claim that
+the transition is softer at a larger modulus (Section~\ref{sec:controls-arms}).
 
 \begin{figure}[t]
   \centering
@@ -110,20 +189,76 @@ contributions list, phrased so that no item claims discovery.}
 \section{Setup}
 \label{sec:setup}
 
-\outline{Day 20. Model: a one-layer decoder-only transformer
-\citep{vaswani2017attention}, $d_{\text{model}} = 128$, 4 heads, 223k
-parameters, attention and LayerNorm written out by hand and checked against the
-fused PyTorch reference. Data: all
-$p^2$ pairs for $p = 97$, sequence $[a, b, =]$, supervised at the ``='' position,
-30\% train split, noiseless and exhaustive so ``test accuracy'' is unambiguous.
-Optimization: full-batch AdamW \citep{loshchilov2019adamw} at
-lr $10^{-3}$ --- full batch specifically so minibatch noise is not a confound,
-and decoupled decay specifically because L2-through-Adam is a different
-regularizer. Define the grok step (first eval step at which test accuracy
-crosses the threshold) and say what is done with runs that never cross it
-(right-censored, not dropped and not imputed --- Section~\ref{sec:surface}).
-State the seed protocol: five seeds per cell everywhere except the
-Section~\ref{sec:surface} grid, which is three.}
+\paragraph{Model.} A one-layer decoder-only transformer
+\citep{vaswani2017attention} with pre-LayerNorm residual blocks:
+$d_{\text{model}} = 128$, 4 heads of width 32, an MLP of width 512, learned
+positional embeddings, and a vocabulary of 98 (the 97 residues plus an ``=''
+token), for 223{,}360 parameters. The attention arithmetic and the LayerNorm
+are written out rather than called from a fused library op, and both are
+checked against PyTorch's reference implementations in the test suite ---
+which is the point of a from-scratch reimplementation and also the only reason
+to trust the read-outs of Section~\ref{sec:mechanism}, since they index into
+internals that a fused kernel does not expose. Dropout is $0.0$, and therefore
+an exact identity, in every run here except the regularizer control of
+Section~\ref{sec:controls-arms}.
+
+\paragraph{Data.} All $p^2 = 9{,}409$ ordered pairs for $p = 97$, encoded as
+the length-3 sequence $[a, b, =]$ with the answer supervised at the ``=''
+position. Train and test are a random partition of that finite universe: at
+30\% it is 2{,}823 training pairs against 6{,}586 test. The task is exhaustive
+and noiseless, so ``test accuracy'' means recovering the map rather than
+smoothing over noise, memorization achieves exactly the training set, and
+chance is $1/97 = 0.0103$ --- a level worth stating because two of this paper's
+corrections turn on how far above it the delay actually sits.
+
+\paragraph{Optimization.} Full-batch AdamW \citep{loshchilov2019adamw}, learning
+rate $10^{-3}$, $\beta = (0.9, 0.98)$. Full batch because the dataset fits in
+one tensor and minibatch noise would otherwise be an uncontrolled variable in
+every sweep below. Decoupled decay rather than L2 folded into the loss because
+those are different regularizers once Adam's preconditioner is applied, and
+weight decay is this paper's main independent variable. Both splits are
+evaluated every 100 steps, which is the resolution of every step count quoted
+here.
+
+\paragraph{Definitions.} The \emph{memorization step} is the first evaluation
+at which training accuracy reaches 99.9\%; on the main configuration it is step
+100 in every seed of every arm, and training accuracy there is exactly $1.0$.
+The \emph{grok step} is the first evaluation at which test accuracy reaches
+99\%. A run stops early once test accuracy holds $\ge 99.9\%$ for a set number
+of consecutive evaluations, and otherwise at a budget of 25{,}000 steps
+(15{,}000 for the decay-scope arm of Section~\ref{sec:scope}). A run that never
+reaches the grok threshold inside its budget has not produced a large grok
+step; it has produced none, bounded below by the budget, and it is treated as
+right-censored throughout --- neither dropped nor imputed
+(Section~\ref{sec:surface}).
+
+\paragraph{Seeds.} A seed sets both the train/test partition and the
+initialization, so a seed spread here bundles those two sources of variation
+and cannot separate them. How many seeds a claim rests on varies by experiment
+and is stated with each: five for the weight-decay and data-fraction sweeps
+(Sections~\ref{sec:wd} and~\ref{sec:frac}), the head-count arms
+(Section~\ref{sec:heads}) and the mechanistic read-outs
+(Section~\ref{sec:seeds}); three for the $wd \times \mathrm{frac}$ grid
+(Section~\ref{sec:surface}), the operations comparison and the operand-swap
+read-outs (Section~\ref{sec:ops}); and one for the learning-rate, dropout,
+modulus and decay-scope controls, for the 60\% fraction point, and for the two
+instrumented trajectories of Sections~\ref{sec:progress}
+and~\ref{sec:attention}. The single-seed arms are stated as directions rather
+than as effect sizes wherever they appear. What each sample size can and cannot
+certify is arithmetic rather than judgement, and
+Sections~\ref{sec:surface} and~\ref{sec:seeds} give it: the exact test used
+throughout has a two-sided floor of $2/\binom{10}{5} = 0.008$ at five versus
+five and $2/\binom{6}{3} = 0.10$ at three versus three, so the grid ranks cells
+and certifies no pairwise comparison.
+
+One asymmetry among the five main-configuration seeds matters enough to state
+here rather than only where it bites. Seed~0 is the run whose checkpoints the
+repository commits, and it was configured to keep training for 30 evaluations
+past the threshold rather than 5, so it ran 11{,}100 steps where seeds 1--4
+stop at 1{,}800--2{,}100. Every trajectory that continues past the transition
+is therefore seed~0's by necessity, and every mechanistic read-out taken at a
+``final'' checkpoint is comparing one long run against four short ones.
+Section~\ref{sec:seeds} measures what that does.
 
 \begin{figure}[t]
   \centering
@@ -535,7 +670,7 @@ The number that matters most for the argument is what the same restriction does
 to the \emph{memorizing} checkpoint. Projecting its logits onto the clean
 $a+b$ subspace recovers far more test accuracy than the raw memorizing model
 expresses: $0.817$ [$0.774$--$0.880$] with ten frequencies kept, against the
-model's own $0.247$ [$0.163$--$0.303$], with every seed's projection above
+model's own $0.247$ [$0.163$--$0.302$], with every seed's projection above
 every seed's raw accuracy. The generalizing circuit is already present,
 drowned out by per-pair memorization, before the test accuracy moves. This is
 one of the few claims here that got \emph{stronger} when it was averaged.
@@ -955,27 +1090,110 @@ level, which is what a run that never found the structure should look like.
 \section{Related work}
 \label{sec:related}
 
-\outline{Day 20, and the section with the highest risk of overclaiming, so it
-gets written before the introduction rather than after. It must say without
-hedging: the phenomenon is \citet{power2022grokking}'s, the Fourier circuit
-and the progress-measure framing are \citet{nanda2023progress}'s, the norm
-account is \citet{liu2023omnigrok}'s and the efficiency account is
-\citet{varma2023efficiency}'s. This work reproduces them from a hand-written
-implementation and adds controls and error bars; nothing here is a discovery
-and the paper must not read as if it were.}
+Nothing in this paper is a discovery. This section attributes each result it
+reproduces and is deliberately specific about which parts of the account above
+are somebody else's, because a reimplementation write-up is exactly the kind of
+document in which that can blur.
+
+\citet{power2022grokking} reported grokking and established the setting used
+here --- small algorithmic datasets, modular arithmetic, a train/test split of
+an exhaustive table, and the observation that generalization can arrive long
+after the training loss has flattened. The phenomenon this paper measures is
+theirs.
+
+\citet{nanda2023progress} opened the trained network on modular addition and
+identified the angle-addition circuit: embeddings that place each residue on a
+circle at a handful of frequencies, and logits assembled by interference so
+that they depend on $a + b$. They introduced the restricted and excluded losses
+as progress measures showing the circuit forming during the delay.
+Section~\ref{sec:fourier}, Section~\ref{sec:attribution} and
+Section~\ref{sec:progress} reproduce those measurements, and
+Section~\ref{sec:progress} follows their construction directly. Where this
+paper differs from them it differs in setup rather than in substance --- a
+different modulus, model size and optimizer put the pre-transition accuracy at
+a different height --- and Section~\ref{sec:progress} says so at the point
+where the difference shows.
+
+\citet{liu2023omnigrok} made the parameter norm central, arguing that grokking
+is what happens when a network initialized at a large norm has to travel to a
+small-norm generalizing solution. Section~\ref{sec:wd} and
+Section~\ref{sec:fourier} reproduce the norm trajectory that account predicts.
+Two results here qualify it rather than confirm it: the dropout control
+(Section~\ref{sec:controls-arms}) groks with a norm that grows monotonically,
+so norm reduction is sufficient and not necessary in this setting, and the
+scope ablation (Section~\ref{sec:scope}) finds that the decay has to act on the
+readout circuit, so the operative quantity is not $\lVert\theta\rVert$ over the
+whole network.
+
+\citet{varma2023efficiency} explain the delay in terms of circuit efficiency:
+the memorizing and generalizing circuits are both available, memorizing is
+cheaper per unit of training loss when the training set is small, and a
+regularizer that penalizes parameter mass eventually makes the generalizing
+circuit the better deal. That is the account Section~\ref{sec:frac}'s mechanism
+paragraph states, and Section~\ref{sec:surface}'s result --- more data
+substitutes for weight decay, multiplicatively --- is what it predicts, in the
+weak sense that a consistent measurement is not evidence for a mechanism over
+its alternatives. Nothing here tests that account against a competitor.
+
+What this paper contributes over those four is stated in
+Section~\ref{sec:intro} and is entirely methodological: controls that separate
+explanations which the single-configuration presentation leaves entangled, and
+seed spread on read-outs that are normally reported from one checkpoint. The
+implementation is written from scratch, which is why the read-outs exist, but
+an independent reimplementation agreeing with published results is a weaker
+kind of evidence than it feels like from the inside --- it agrees with them
+because they are correct, and the interesting cases would be the ones where it
+did not.
 
 % ===========================================================================
 \section{Limitations}
 \label{sec:limitations}
 
-\outline{Day 20. Named, not buried. One operation family on one modulus at one
-model size; a 25k-step budget that right-censors part of the
-Section~\ref{sec:surface} grid and is itself the reason the ``cliff'' there is
-not a dynamical claim; three seeds rather than five on that grid; five seeds
-being enough to reach $p = 0.008$ and not enough to reach anything smaller;
-mechanistic read-outs taken at two checkpoints rather than continuously; and
-the seed-0 budget mismatch of Section~\ref{sec:seeds}, which is fixed in the
-reporting but not in the underlying runs.}
+\paragraph{One task.} Every result here is a binary operation on residues mod
+97 (mod 113 once), on a 223k-parameter one-layer transformer, at one width and
+depth. Section~\ref{sec:ops} varies the operation and Section~\ref{sec:heads}
+varies the head count at fixed $d_{\text{model}}$; nothing varies the depth,
+the width, the architecture family or the data domain. Grokking outside
+algorithmic data \citep{liu2023omnigrok} is not touched.
+
+\paragraph{The budget is a variable, and it is doing work.} Runs stop at
+25{,}000 steps. Three cells of the Section~\ref{sec:surface} grid never grok
+inside that, and the resulting ``cliff'' at $wd = 0$ is the edge of the
+compute rather than a feature of the dynamics --- Section~\ref{sec:surface}
+shows the censored cells are consistent with the same multiplicative law as
+the rest. Nothing here says what those cells would do at $10^5$ steps.
+
+\paragraph{Three seeds on the grid, five elsewhere, one on the controls.}
+The exact test's two-sided floor is $0.10$ at three versus three, so the
+grid ranks cells and compares steps against spreads but certifies no pairwise
+comparison; the five-seed arms reach $0.008$ and can reach nothing smaller, so
+``complete separation'' is the strongest statement available and finer
+distinctions are simply out of reach at this sample size. The four control arms
+of Section~\ref{sec:controls-arms} and Section~\ref{sec:scope} are one seed
+each and are stated as directions.
+
+\paragraph{Two checkpoints, not a trajectory.} The mechanistic read-outs of
+Section~\ref{sec:mechanism} are measured at the memorization point and at the
+end. Only the progress measures of Section~\ref{sec:progress} and the attention
+read-outs of Section~\ref{sec:attention} are instrumented per evaluation, and
+both are single runs. Claims about \emph{when} something forms therefore rest
+on one seed, which is why Section~\ref{sec:progress} quantifies the pre-jump
+share of a read-out's rise rather than asserting that it rises early.
+
+\paragraph{The run-length confound is reported, not removed.} Seed~0 trained
+11{,}100 steps and seeds 1--4 stopped at 1{,}800--2{,}100
+(Section~\ref{sec:setup}), so ``the state of the circuit after grokking''
+means two different amounts of post-transition weight decay depending on the
+seed. Section~\ref{sec:seeds} shows the conclusions hold on the four matched
+runs alone, at the weaker floor four versus four permits. What remains unknown
+is how much of the measured sparsification is the transition and how much is
+the 9{,}000 steps after it; separating those needs the short runs retrained to
+a matched budget, which has not been done.
+
+\paragraph{Reproduction, not replication.} The implementation is independent
+but the experimental design is not: it follows \citet{nanda2023progress}'s
+choices closely enough that a systematic error in those choices would be
+reproduced here rather than caught.
 
 % ===========================================================================
 \section{Conclusion}
