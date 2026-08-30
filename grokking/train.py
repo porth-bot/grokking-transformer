@@ -42,6 +42,17 @@ from .data import modular_dataset, train_test_split
 from .model import ModelConfig, Transformer
 
 
+# The two thresholds that define the events this repo measures, and the third
+# that decides when a run has nothing left to show. They are named rather than
+# inlined because paper/main.tex's Setup section states all three in prose and
+# tests/test_paper_setup.py checks that prose against these values -- a number
+# typed into a definition is exactly as capable of drifting as one typed into a
+# table (see tests/test_paper_numbers.py).
+MEMORIZE_ACC = 0.999    # train acc at the memorization step
+GROK_ACC = 0.99         # test acc at the grok step
+EARLY_STOP_ACC = 0.999  # test acc that must hold for `patience` evals to stop
+
+
 @dataclass
 class TrainConfig:
     p: int = 97
@@ -210,12 +221,12 @@ def train(
             )
             if on_eval is not None:
                 on_eval(step, model)
-            if memorize_step is None and tr_acc >= 0.999:
+            if memorize_step is None and tr_acc >= MEMORIZE_ACC:
                 memorize_step = step
                 torch.save(model.state_dict(), out / f"{name}_memorize.pt")
-            if grok_step is None and te_acc >= 0.99:
+            if grok_step is None and te_acc >= GROK_ACC:
                 grok_step = step
-            streak = streak + 1 if te_acc >= 0.999 else 0
+            streak = streak + 1 if te_acc >= EARLY_STOP_ACC else 0
             if verbose and step % (10 * cfg.eval_every) == 0:
                 print(
                     f"[{name}] step {step:6d}  train {tr_acc:6.3f}  "
