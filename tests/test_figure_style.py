@@ -104,3 +104,72 @@ def test_importing_a_figure_script_alone_already_sets_the_style():
         cwd=EXPERIMENTS, capture_output=True, text=True, check=True,
     )
     assert out.stdout.split() == ["150.0", "150.0"], out.stdout
+
+
+# -- the version stamp -------------------------------------------------------
+#
+# Matplotlib writes a "Software: Matplotlib version X.Y.Z" tEXt chunk into
+# every PNG. Nothing renders it, and it makes the committed figures
+# byte-unstable across a patch release while leaving them pixel-identical --
+# which is a problem for exactly one thing, and it happens to be the check
+# this repo leans on hardest: regenerating the figures from a fresh clone and
+# comparing them to the committed ones. On matplotlib 3.11.1 against a repo
+# drawn on 3.11.0, that check called all 18 figures different and all 18
+# decoded to identical pixels.
+
+def test_the_committed_figures_carry_no_matplotlib_version_stamp():
+    tagged = [p.name for p in sorted((ROOT / "figures").glob("*.png"))
+              if b"Software" in p.read_bytes()]
+    assert not tagged, (
+        "these figures were written without the shared style's savefig wrapper "
+        f"and will drift on the next matplotlib release: {tagged}"
+    )
+
+
+def test_applying_the_style_strips_the_stamp_from_a_new_png(tmp_path):
+    import matplotlib.pyplot as plt
+
+    _style.apply_style()
+    fig = plt.figure()
+    try:
+        fig.savefig(tmp_path / "stamped.png")
+    finally:
+        plt.close(fig)
+    assert b"Software" not in (tmp_path / "stamped.png").read_bytes()
+
+
+def test_the_wrapper_leaves_pdf_output_alone(tmp_path):
+    """PDF metadata takes a different set of keys, and ``paper_figures``
+    wraps this wrapper to redirect the whole paper build into PDFs -- so the
+    injection has to be PNG-only or the paper stops building."""
+    import matplotlib.pyplot as plt
+
+    _style.apply_style()
+    fig = plt.figure()
+    try:
+        fig.savefig(tmp_path / "plain.pdf")
+    finally:
+        plt.close(fig)
+    assert (tmp_path / "plain.pdf").stat().st_size > 0
+
+
+def test_an_explicit_metadata_argument_still_wins(tmp_path):
+    import matplotlib.pyplot as plt
+
+    _style.apply_style()
+    fig = plt.figure()
+    try:
+        fig.savefig(tmp_path / "mine.png", metadata={"Software": "chosen"})
+    finally:
+        plt.close(fig)
+    assert b"chosen" in (tmp_path / "mine.png").read_bytes()
+
+
+def test_the_wrapper_is_installed_once_however_often_the_style_is_applied():
+    from matplotlib.figure import Figure
+
+    _style.apply_style()
+    once = Figure.savefig
+    _style.apply_style()
+    _style.apply_style()
+    assert Figure.savefig is once
