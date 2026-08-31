@@ -97,13 +97,29 @@ def main_grokking_figure():
     ax.legend(loc="center left")
 
     ax = axes[1]
-    ax.plot(nonzero_steps(h), h["weight_norm"], color="C2", lw=1.6)
+    steps, norm = nonzero_steps(h), h["weight_norm"]
+    ax.plot(steps, norm, color="C2", lw=1.6)
     ax.set_xscale("log")
     ax.set_xlabel("step (log scale)")
     ax.set_ylabel(r"$\|\theta\|_2$ (all parameters)")
     if s["grok_step"]:
         ax.axvline(s["grok_step"], color="gray", ls="--", lw=1)
-    ax.set_title("Norm rises to the transition, then decay takes over", loc="left")
+    # The title used to read "Norm rises to the transition, then decay takes
+    # over", which is a shape rather than a measurement -- and the plotted
+    # series does not have it: the peak is at 1.9x the grok step, so the norm
+    # is still climbing for the whole first grok step's worth of training
+    # *after* the transition. Compute it instead of asserting it.
+    peak = max(range(len(norm)), key=lambda i: norm[i])
+    peak_step, drawdown = steps[peak], 1 - norm[-1] / norm[peak]
+    ax.axvline(peak_step, color="C2", ls=":", lw=1)
+    ax.annotate("norm peak", (peak_step, min(norm)), rotation=90, fontsize=7,
+                color="C2", ha="right", va="bottom")
+    ratio = peak_step / s["grok_step"] if s["grok_step"] else float("nan")
+    ax.set_title(
+        f"Norm peaks at step {peak_step:,.0f} ({ratio:.1f}x the grok step), "
+        f"then falls {drawdown:.0%}",
+        loc="left",
+    )
     savefig(fig, "grokking_main.png")
 
 
