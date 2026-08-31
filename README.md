@@ -263,7 +263,7 @@ applied to; the untargeted group trains at wd 0.
 |---|---|---|---|
 | decay everything (main) | step 100 | step 1900 | 1.00 |
 | decay **non-embeddings only** | step 100 | **step 1800** | 1.00 |
-| decay **embeddings only** | step 100 | **never** (15k steps) | 0.36 |
+| decay **embeddings only** | step 100 | **never** (15k steps) | 0.35 |
 
 ![weight-decay scope](figures/wd_scope.png)
 
@@ -272,7 +272,7 @@ alone reproduces the full-decay run almost exactly (grok step 1800 vs 1900, the
 two curves overlap). Decaying only the embeddings does essentially nothing: the
 model never groks in 15k steps, because the rest of the network — now
 unconstrained — keeps its large memorization weights, and the total norm climbs
-without bound ($\|\theta\|$ balloons from 21 to **287**, the green curve, while
+without bound ($\|\theta\|$ balloons from **21.7 to 287**, the green curve, while
 both grokking runs hold it near 20–40). Weight decay drives grokking by
 shrinking the *readout* circuit's parameters; pinning the embeddings' norm is
 neither sufficient nor the operative lever. (The embeddings supply the Fourier
@@ -475,12 +475,12 @@ underlying **group** the network has to discover:
 Holding the main config fixed (frac 0.30) and sweeping the operation at strong
 and weak weight decay, **three seeds per cell**:
 
-| operation | answer group | wd | grok step, median [min–max] | final test |
+| operation | answer group | wd | grok step, median [min–max] | final test, worst seed |
 |---|---|---|---|---|
 | (a+b) mod 97 | Z/97 (order 97) | 1.0 | 1,300 [1,200–1,900] | 1.000 |
 | (a−b) mod 97 | Z/97 (order 97) | 1.0 | 3,700 [2,500–3,900] | 1.000 |
 | (a×b) mod 97 | (Z/97)ˣ (order 96) | 1.0 | 1,100 [1,000–1,500] | 1.000 |
-| (a+b) mod 97 | Z/97 (order 97) | 0.1 | 10,800 [9,200–13,900] | 1.000 |
+| (a+b) mod 97 | Z/97 (order 97) | 0.1 | 10,800 [9,200–13,900] | 0.999 |
 | (a−b) mod 97 | Z/97 (order 97) | 0.1 | **24,800 (1 of 3 seeds)** | 0.148 / 0.047 / 0.962 |
 | (a×b) mod 97 | (Z/97)ˣ (order 96) | 0.1 | 8,400 [7,900–11,900] | 1.000 |
 
@@ -876,8 +876,11 @@ retraining):
 
   What this does **not** show, since it was the motivating question: the
   symmetry is restored at step 2300, *after* test accuracy passes 0.5 (1500) and
-  after the grok step (1900). Unlike §10's restricted loss, this read-out is a
-  lagging indicator, not an early warning. The *trajectory* is seed 0 only —
+  after the grok step (1900). "Restored" needs a definition that survives the
+  first regime: the obvious one — the first step within 1% of $\ln 2$ — returns
+  step 0, because a fresh model is already symmetric on average, so the search
+  runs forward from the step of peak asymmetry instead. Unlike §10's
+  restricted loss, this read-out is a lagging indicator, not an early warning. The *trajectory* is seed 0 only —
   it needs an instrumented rerun, not just checkpoints — but its two endpoints
   are in §12's five-seed table, where the full-row entropy rises in every seed
   (0.751 → 0.912) and the operand entropy reaches $\ln 2$ in every seed. The
@@ -952,7 +955,7 @@ the training costs are the wall-clock the committed run logs actually recorded
 (`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 287 tests
+pytest                              # 296 tests
 python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
 python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
 python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)
