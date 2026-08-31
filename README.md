@@ -177,15 +177,29 @@ measures what is climbing during it.
 
 Two measurements on the main run (30%, wd = 1), same seed, same trajectory:
 
-- **Weight norm** (right panel of the hero figure): rises while the
-  loss-gradient dominates, peaks around the transition, then falls once
-  train loss is pinned at ~0 and decay is the only force left. (Our first
-  version of this run early-stopped 500 steps after grokking and *missed*
-  the decline — the run was extended to 11k steps precisely so the plot
-  shows the dynamics rather than an artifact of the stopping rule.) The
-  decline belongs to weight decay rather than to grokking: §13's wd = 0
+- **Weight norm** (right panel of the hero figure): rises, peaks, falls — but
+  it peaks at step **3,700**, which is **1.9x the grok step**, not at the
+  transition. The norm is 24.1 at memorization and 27.8 at the grok step and
+  goes on climbing for another 1,800 steps to 32.9 before falling 22% over the
+  rest of the run. (That peak is stable under smoothing: the highest
+  1,000-step median is in the 3,000–4,000 bin.) "Peaks around the transition,
+  then decay takes over once train loss is pinned at ~0" is what this bullet
+  and the panel title used to say, and the log refutes the mechanism as well as
+  the timing: train loss is already ~1e-1 at step 100, ~2e-2 by step 200 and
+  ~1e-4 by 1,500, so that account puts the decline two thousand steps before it
+  happens. The panel
+  title now computes the peak step and the drawdown from the plotted series.
+  (Our first version of this run early-stopped 500 steps after grokking and
+  *missed* the decline entirely — the run was extended to 11k steps precisely
+  so the plot shows the dynamics rather than an artifact of the stopping rule.)
+  The decline belongs to weight decay rather than to grokking: §13's wd = 0
   runs grok at 40% data with the norm rising monotonically throughout,
-  0.00% drawdown in every seed.
+  0.00% drawdown in every seed. That comparison rests on the two long runs —
+  seed 0 here (11,100 steps, −22%) against the wd = 0 seed that ran 19,300 and
+  never fell — because the other four wd = 1 seeds early-stop at 1,800–2,100,
+  two of them peaking at their own last eval and none ending more than 6.8%
+  below its peak, so their 7–12% maximum drawdowns are mid-run dips and not a
+  trend.
 - **Embedding Fourier spectrum** — the algorithm's fingerprint. At the
   memorization checkpoint, spectral energy is spread across all 48
   frequencies (top-5 share: **13.6%**, indistinguishable from unstructured).
@@ -747,8 +761,10 @@ weight decay, multiplicatively, with no synergy detectable at this resolution.**
 **One mechanistic consequence, and it qualifies §5.** The wd = 0 runs at 40%
 reach ~0.999 test accuracy with a parameter norm that never once falls below its
 running peak — maximum drawdown **0.00%** across every eval of all three seeds,
-ending at 722 / 76 / 32 against an initial 21.7. The wd = 1 runs at 30% fall
-7–23% from their peak. §5's norm rise-then-fall is therefore a signature of the
+ending at 722 / 76 / 32 against an initial 21.7. The wd = 1 runs at 30% have
+maximum drawdowns of 7.1–23.2%, though only seed 0 runs long enough for that to
+be a sustained decline rather than a mid-run dip (see §5). §5's norm
+rise-then-fall is therefore a signature of the
 *weight-decay-driven* transition, not of grokking: a network can grok with a
 monotonically growing norm. Consistent with the direction of §7 (the norm
 pressure matters where it is applied), and it is the reason this section does
