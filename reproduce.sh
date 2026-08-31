@@ -2,7 +2,7 @@
 #
 # Regenerate every figure in figures/ from the committed logs and checkpoints.
 #
-#     ./reproduce.sh              # tests, mypy, then all 18 figures: ~35 s
+#     ./reproduce.sh              # tests, mypy, then all 18 figures: ~60 s
 #     PYTHON=/path/to/python ./reproduce.sh
 #
 # NO TRAINING happens here, and that is the point. The sweeps behind these

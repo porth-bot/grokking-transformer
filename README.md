@@ -906,6 +906,29 @@ retraining):
 
   ![embedding ring](figures/embedding_circle.png)
 
+## Paper
+
+The results above are also written up as a paper-style PDF:
+**[grokking-in-a-one-layer-transformer.pdf](https://github.com/porth-bot/grokking-transformer/releases/latest/download/grokking-in-a-one-layer-transformer.pdf)**
+(26 pages, attached to the [latest release](https://github.com/porth-bot/grokking-transformer/releases/latest)).
+It covers the same measurements with the controls and error bars foregrounded,
+and is the better read if you want the argument rather than the repo.
+
+Source is [`paper/main.tex`](paper/main.tex). **The figures in it are not
+committed**: `paper/figures/*.pdf` and `main.pdf` are both gitignored, and CI's
+`paper` job regenerates every figure from the logs in `runs/` before typesetting
+(`./paper/build.sh` does the same locally, given [tectonic](https://tectonic-typesetting.github.io)).
+A stale paper figure is therefore structurally impossible rather than merely
+discouraged. What that does *not* cover is a number typed into the prose, so
+four test modules do:
+[`test_paper.py`](tests/test_paper.py) (figures, refs, citations),
+[`test_paper_numbers.py`](tests/test_paper_numbers.py) (every tabulated grok
+step, recomputed from `runs/`),
+[`test_paper_setup.py`](tests/test_paper_setup.py) (the Setup section against
+the code and configs) and
+[`test_paper_prose.py`](tests/test_paper_prose.py) (the trajectory numbers and
+shapes quoted in the results sections and the figure captions).
+
 ## Reproduce
 
 Every figure, from a clean clone, without training anything:
@@ -913,7 +936,7 @@ Every figure, from a clean clone, without training anything:
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
-./reproduce.sh                      # tests, mypy, all 18 figures: ~35 s
+./reproduce.sh                      # tests, mypy, all 18 figures: ~60 s
 ```
 
 `requirements.txt` pins the exact versions the committed runs were produced
@@ -929,7 +952,7 @@ the training costs are the wall-clock the committed run logs actually recorded
 (`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 176 tests
+pytest                              # 287 tests
 python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
 python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
 python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)
