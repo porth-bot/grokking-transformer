@@ -3,13 +3,6 @@
 % Build:  ./paper/build.sh        (regenerates figures, then runs tectonic)
 % CI builds this on every push; see .github/workflows/ci.yml, job "paper".
 %
-% STATUS: draft. Everything is written except the conclusion, which is still
-% an \outline{...} block -- a plan for prose that is not written yet. The
-% \outlinetrue switch on the next line makes it visible in the PDF (with a
-% DRAFT banner) so an unfinished draft cannot be mistaken for a finished one.
-% Setting \outlinefalse hides it, and the banner, the switch and the macro
-% all come out when that last block does.
-%
 % Figures come from paper/figures/*.pdf, which is NOT committed: it is
 % regenerated from the committed logs by experiments/paper_figures.py before
 % every build, so a figure here can never be staler than the data it plots.
@@ -30,27 +23,6 @@
 
 \graphicspath{{figures/}}
 
-% ---- outline scaffolding (removed when the prose lands) --------------------
-\newif\ifoutline
-\outlinetrue
-
-\newcommand{\outline}[1]{%
-  \ifoutline
-    \par\medskip\noindent
-    \begingroup\small\color{blue!45!black}%
-    \textsf{\textbf{[outline]}}~#1\par
-    \endgroup\medskip
-  \fi}
-
-\newcommand{\draftbanner}{%
-  \ifoutline
-    \begin{center}\small\color{red!60!black}
-    \textsf{DRAFT --- everything is written except the conclusion, which is
-    still the plan marked \textbf{[outline]} rather than prose.}
-    \end{center}
-  \fi}
-% ---------------------------------------------------------------------------
-
 \title{Grokking in a one-layer transformer:\\
        what controls the delay, and what forms during it}
 \author{porth-bot\thanks{Source, logs and figures:
@@ -59,18 +31,20 @@
 
 \begin{document}
 \maketitle
-\draftbanner
 
 \begin{abstract}
 A one-layer decoder-only transformer trained full-batch on 30\% of the
 $(a+b) \bmod 97$ table reaches 100\% training accuracy at step 100 and does not
-reach 99\% test accuracy for another 1{,}300 steps (median over five seeds).
+reach 99\% test accuracy until step 1{,}300 (median over five seeds), a delay of
+$13\times$ the time it took to memorize.
 The phenomenon is \citet{power2022grokking}'s and the Fourier circuit found
 inside it is \citet{nanda2023progress}'s; both are reproduced here from a
 hand-written implementation, and nothing in this write-up is a new phenomenon.
 What it adds is controls and error bars. Weight decay and training fraction
-each change the median delay by about a factor of nine across the range swept,
-with one end of the weight-decay sweep not grokking at all, and a
+each change the median delay by roughly an order of magnitude across the cells
+that grok at all ($8.3\times$ from $wd = 0.1$ to $wd = 1$, $9.0\times$ from
+25\% to 40\% of the table), with one end of the weight-decay sweep not
+grokking at all, and a
 $4 \times 3$ grid says they multiply with no interaction detectable at three
 seeds per cell --- including the finding that 40\% of the table groks with no
 explicit regularizer at all, so ``$wd = 0$ never groks'' was a statement about
@@ -178,10 +152,12 @@ the transition is softer at a larger modulus (Section~\ref{sec:controls-arms}).
   memorization and generalization steps marked. Training accuracy saturates
   early; test accuracy then climbs slowly for roughly an order of magnitude in
   step count --- from $0.16$ at memorization to $0.51$, against a chance level
-  of $1/97 = 0.0103$ --- before jumping to $1.0$. \emph{Right:} the $\ell_2$ norm of all
-  parameters over the same trajectory, rising to the transition and falling
-  afterwards. Seed spread is not shown here --- it is in Figures~\ref{fig:wd}
-  and~\ref{fig:frac}.}
+  of $1/97 = 0.0103$ --- before jumping to $1.0$. \emph{Right:} the $\ell_2$
+  norm of all parameters over the same trajectory. It rises \emph{through} the
+  transition rather than up to it: the peak is at step 3{,}700, $1.9\times$ the
+  grok step, and the $22\%$ decline is all afterwards. The panel title computes
+  both numbers from the plotted series. Seed spread is not shown here --- it is
+  in Figures~\ref{fig:wd} and~\ref{fig:frac}.}
   \label{fig:main}
 \end{figure}
 
@@ -500,7 +476,7 @@ dropout, which does not target the norm at all. Dropout $0.1$ at $wd = 0$
 groks, at step 3{,}500, to final test accuracy $0.999$
 (Figure~\ref{fig:dropout}). So it is not weight decay specifically that is
 required --- but the route is visibly different: under dropout the parameter
-norm \emph{rises} monotonically throughout, $21 \to 55$, while the $wd = 1$
+norm \emph{rises} monotonically throughout, $21.7 \to 55.2$, while the $wd = 1$
 run generalizes with the norm coming down. Norm reduction is sufficient here
 and not necessary. What the two share, and what the unregularized run lacks, is
 pressure against the pure-memorization solution rather than any particular way
@@ -557,9 +533,9 @@ The answer is unambiguous, and it is the readout circuit
 reproduces the full-decay run almost exactly --- grok step 1{,}800 against
 1{,}900, with the two accuracy curves overlapping. Decaying only the
 embeddings does essentially nothing: the model never groks in 15{,}000 steps
-and ends at $0.36$ test accuracy, while the rest of the network, now
+and ends at $0.35$ test accuracy, while the rest of the network, now
 unconstrained, keeps its large memorization weights and the total norm climbs
-from $21$ to $287$ against the $20$--$40$ the two grokking runs hold. So the
+from $21.7$ to $287$ against the $20$--$40$ the two grokking runs hold. So the
 embeddings supply the Fourier basis but their \emph{scale} is not what
 memorization exploits, and pinning it is neither sufficient nor the operative
 lever. Read against \citet{liu2023omnigrok}, this locates the norm effect
@@ -586,17 +562,44 @@ $\lVert\theta\rVert$ over the whole network.
 Two measurements on the main run, one along the trajectory and one between its
 two committed checkpoints.
 
-The parameter norm rises while the task gradient dominates, peaks around the
-transition, and falls afterwards once the training loss is pinned near zero and
-the decay is the only force left (Figure~\ref{fig:main}, right). It is
-tempting to read that shape as the signature of grokking, and it is not:
-Section~\ref{sec:surface}'s $wd = 0$ runs at 40\% data reach
+The parameter norm rises, peaks, and falls (Figure~\ref{fig:main}, right), and
+both halves of that shape are further from the transition than the summary
+suggests. The rise does not stop at the grok step: the norm is $24.1$ at
+memorization and $27.8$ at the grok step, and it goes on climbing for another
+$1{,}800$ steps to a peak of $32.9$ at step 3{,}700 --- $1.9\times$ the grok
+step, and stable under smoothing, since the highest 1{,}000-step median sits in
+the $3{,}000$--$4{,}000$ bin. Only then does it fall, $22\%$ over the remaining
+$7{,}400$ steps. The tidier reading --- that the norm climbs while the task
+gradient dominates and falls once the training loss is pinned near zero and the
+decay is the only force left --- does not survive its own log either: the
+training loss is already ${\sim}10^{-1}$ at step 100, ${\sim}2 \times 10^{-2}$ by
+step 200 and ${\sim}10^{-4}$ by step 1{,}500, so on that account the decline
+should start two thousand steps before it does. What the trajectory shows is a
+norm that keeps growing while the circuit is still being assembled and shrinks
+afterwards, with the transition sitting inside the growth rather than at its
+end.
+
+It is tempting to read the rise-and-fall as the signature of grokking, and it is
+not: Section~\ref{sec:surface}'s $wd = 0$ runs at 40\% data reach
 ${\sim}0.999$ test accuracy with a norm that never once falls below its running
 peak --- maximum drawdown $0.00\%$ across every eval of all three seeds,
-ending at $722$, $76$ and $32$ from an initial $21.7$ --- while the $wd = 1$
-runs fall 7--23\% from their peak. The rise-then-fall belongs to the
-weight-decay-driven transition, not to the transition as such. A network can
-grok with a monotonically growing norm.
+ending at $722$, $76$ and $32$ from an initial $21.7$ --- while the five
+$wd = 1$ runs have maximum drawdowns of 7.1--23.2\%. A network can grok with a
+monotonically growing norm, so the decline belongs to the weight decay and not
+to the transition.
+
+That comparison is between two runs and not between two groups of five, and
+saying which two matters, because the run-length asymmetry of
+Section~\ref{sec:setup} reaches this measurement as well. Only seed~0 shows a
+\emph{sustained} post-peak decline; seeds 1--4 early-stop at 1{,}800--2{,}100
+steps, two of them peaking at their own last evaluation, so what separates
+their final norm from their peak is 0.0--6.8\% and their 7--12\% maximum
+drawdowns are mid-run dips rather than a downward trend. The comparison that
+carries the claim is therefore the long run on each side: seed~0 at $wd = 1$
+falls $22\%$ over 11{,}100 steps, and the $wd = 0$ seed that ran longest ---
+19{,}300 steps, nearly twice as many --- never falls at all, ending at $722$
+from $21.7$. The short runs on both sides are consistent with that and
+establish nothing on their own.
 
 The embedding spectrum is the algorithm's fingerprint and it moves the way the
 circuit story requires (Figure~\ref{fig:spectrum}). At memorization the
@@ -777,8 +780,12 @@ instrumented run, which is why the second is seed 0's value rather than the
 $0.119$ five-seed mean above --- and grokking puts it back. The model does not learn commutativity so
 much as recover it. And the read-out is a \emph{lagging} indicator: the
 symmetry is restored at step 2{,}300, after test accuracy passes $0.5$ at
-1{,}500 and after the grok step at 1{,}900. Unlike the restricted loss of
-Section~\ref{sec:progress} it is no early warning.
+1{,}500 and after the grok step at 1{,}900. ``Restored'' needs a definition
+that survives the first regime: the obvious one --- the first step at which the
+operand entropy comes within 1\% of $\ln 2$ --- returns step 0, because a
+randomly initialized model is already symmetric on average, so the search runs
+forward from the step of peak asymmetry instead. Unlike the restricted loss of
+Section~\ref{sec:progress} this read-out is no early warning.
 
 Read through the usual ``attention sharpens'' lens the entropy trajectory is
 misleading twice over. Entropy \emph{rises} through grokking, $0.677 \to
@@ -1199,7 +1206,54 @@ reproduced here rather than caught.
 \section{Conclusion}
 \label{sec:conclusion}
 
-\outline{Day 21, last, once everything above is settled and only then.}
+Grokking reproduces on modular addition in a hand-written one-layer
+transformer, and so does the Fourier circuit inside it. Neither of those is
+news, and this paper is worth reading only for what a reimplementation is well
+placed to buy: arms that rule an explanation out, and error bars on read-outs
+that are normally reported from a single checkpoint.
+
+The controls change three statements. ``$wd = 0$ never groks'' is a fact about
+the 30\% row and not about the method --- 40\% of the table groks in every
+seed with no explicit regularizer --- and the grid that shows it also shows
+the two knobs multiplying, with no interaction detectable at three seeds per
+cell and the apparent cliff at $wd = 0$ turning out to be the edge of the
+compute budget. Norm reduction is sufficient and not necessary: dropout groks
+with the parameter norm rising monotonically to $55.2$. And the norm pressure
+has to act on the readout circuit, not on the embeddings that carry the
+Fourier basis --- decaying the embeddings alone never groks. The error bars
+change a fourth: of thirteen mechanistic read-outs, twelve separate
+memorization from generalization completely, which at five seeds per arm is
+the smallest $p$ the test can return, while the effect sizes this repository
+had published from one run are the largest the five seeds contain. That is not
+a lucky seed but an unmatched budget --- the published run trained five to six
+times longer than the others --- and the difference matters, because ``lucky
+seed'' would be noise and ``trained longer'' is a confound that survives
+averaging.
+
+Two habits did most of the work here and neither is specific to grokking. The
+first is building the arm that could falsify the headline before writing the
+headline: the $wd = 0$ control at 40\%, the dropout arm, the shuffle baseline
+for the swap read-outs, and the chance levels for the diagonal energy and the
+ring's variance share each turned a description into a measurement, and three
+of them refuted the sentence they were built to support. The second is
+reporting what the sample size can certify next to what it found --- the exact
+test's floor beside every $p$-value, censored cells hatched rather than
+coloured, single-seed arms stated as directions --- which is what makes the
+difference between ``no effect'' and ``no resolution'' legible instead of
+rhetorical. Every prose correction made while this paper was written was a
+number or a shape that had drifted from the log behind it in a repository that
+already regenerates its figures automatically, the last of them a figure title
+asserting that the parameter norm peaks at the transition when the plotted
+series peaks at $1.9\times$ the grok step. A caption is a claim, and it needs
+the same instrument as the rest.
+
+What the study cannot say is bounded by the same design. One operation family,
+one architecture, one modulus but for a single control, and a 25{,}000-step
+budget that three cells of the grid never escape. The run-length confound is
+reported rather than removed: separating how much of the measured
+sparsification is the transition and how much is the nine thousand steps after
+it needs the four short runs retrained to a matched budget, which would be the
+first thing to do next.
 
 % ===========================================================================
 \bibliographystyle{plainnat}
