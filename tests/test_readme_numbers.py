@@ -277,6 +277,12 @@ def test_the_readme_quotes_the_number_of_tests_there_are(request):
     claimed = int(m.group(1))
     if not _whole_suite(request.config):
         pytest.skip("a partial run's count says nothing about the README's")
+    # The count is a property of the environment the README's own Reproduce
+    # block builds, which installs requirements.txt. CI installs torch and
+    # pytest only, so the six modules guarded by a module-level
+    # importorskip("matplotlib") are never collected there and the total is 249
+    # rather than 298 -- a true statement about a different environment.
+    pytest.importorskip("matplotlib")
     collected = request.session.testscollected
     assert claimed == collected, (
         f"README says {claimed} tests, this run collected {collected}"
