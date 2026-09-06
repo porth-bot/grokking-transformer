@@ -955,7 +955,7 @@ the training costs are the wall-clock the committed run logs actually recorded
 (`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 296 tests
+pytest                              # 298 tests
 python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
 python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
 python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)

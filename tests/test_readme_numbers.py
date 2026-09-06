@@ -21,7 +21,10 @@ test job.
 import csv
 import json
 import re
+import subprocess
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNS = ROOT / "runs"
@@ -245,3 +248,50 @@ def test_the_surface_table_matches_the_runs_including_its_censoring():
                 assert text == "> 25,000", f"({frac}, {wd}) is censored: {text!r}"
             else:
                 assert text == cell(steps), f"({frac}, {wd}): {text!r}"
+
+
+# --- the counts the README quotes about the repo itself -------------------
+#
+# Everything above recomputes a measurement from a log. These two do not:
+# they check the numbers the README states about this repository -- how many
+# tests there are, how many figures ship -- which is the one class of claim
+# no instrument here was looking at. gp-from-scratch's Reproduce block had
+# drifted to 340 tests against a real 366 for exactly that reason.
+
+
+def _whole_suite(config) -> bool:
+    """True when this run collected everything, so a total means something.
+
+    ``pytest tests/test_seeds.py`` or ``-k foo`` collects a subset; asserting a
+    total against that would fail for a reason unrelated to the README. With no
+    path argument pytest records the rootdir as its one arg.
+    """
+    if config.option.keyword or config.option.markexpr:
+        return False
+    return [Path(a).resolve() for a in config.args] == [ROOT]
+
+
+def test_the_readme_quotes_the_number_of_tests_there_are(request):
+    m = re.search(r"^pytest\s+# (\d+) tests", README, re.M)
+    assert m, "the README's Reproduce block no longer quotes a test count"
+    claimed = int(m.group(1))
+    if not _whole_suite(request.config):
+        pytest.skip("a partial run's count says nothing about the README's")
+    collected = request.session.testscollected
+    assert claimed == collected, (
+        f"README says {claimed} tests, this run collected {collected}"
+    )
+
+
+def test_the_readme_and_reproduce_sh_agree_on_how_many_figures_ship():
+    tracked = subprocess.run(
+        ["git", "ls-files", "figures/*.png"],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split()
+    claimed = {int(n) for n in re.findall(r"all (\d+) figures", README)}
+    script = (ROOT / "reproduce.sh").read_text()
+    claimed |= {int(n) for n in re.findall(r"all (\d+) (?:committed )?figures", script)}
+    assert claimed, "neither document states a figure count any more"
+    assert claimed == {len(tracked)}, (
+        f"README/reproduce.sh claim {sorted(claimed)} figures, git tracks {len(tracked)}"
+    )
