@@ -5,8 +5,12 @@
 A decoder-only transformer implemented from scratch (the attention arithmetic
 is written out and tested against PyTorch's fused reference) and used to
 reproduce and dissect **grokking**: on modular addition, the model reaches
-100% *training* accuracy at step 100 and stays near ~20% *test* accuracy for
-~1,300 steps (median over 5 seeds) — then jumps to 100%. The repo measures
+100% *training* accuracy at step 100, where its test accuracy is already 0.247
+[0.163–0.302] over five seeds against a chance level of 0.0103, and takes
+another **1,200 steps** to reach 99% test, a median **grok step of 1,300**.
+The delay is not a plateau near chance: test accuracy climbs the whole way
+through it, reaching 0.924–0.988 at the last eval before each seed's jump
+(§4), and §10 measures the circuit forming during it. The repo measures
 what controls the delay
 (weight decay, data fraction) and inspects what changes inside the network
 (weight norm, the Fourier structure of its embeddings) when it finally
@@ -166,12 +170,12 @@ near chance through a long plateau". **Both halves of that are wrong and the
 committed logs say so.** $p = 97$ does not sit near chance either: across the
 five main-config seeds its test accuracy at the memorization step is 0.247
 [0.163–0.302] against a chance level of $1/97 = 0.0103$, i.e. 16–29× chance,
-and it climbs to 0.377–0.557 at the last eval before the jump. So $p = 113$'s
-0.288 sits **inside** $p = 97$'s own seed range, and the comparison was
-between one seed of each — the $p = 97$ run quoted was seed 0, which is the
-*lowest* of the five on this statistic. The delay is not a near-chance
-plateau at either modulus; it is a steady climb that ends in a jump. §10
-measures what is climbing during it.
+and it climbs to 0.924–0.988 at the last eval before each seed's own grok
+step. So $p = 113$'s 0.288 sits **inside** $p = 97$'s own seed range, and the
+comparison was between one seed of each — the $p = 97$ run quoted was seed 0,
+which is the *lowest* of the five on this statistic. The delay is not a
+near-chance plateau at either modulus; it is a steady climb that ends in a
+jump. §10 measures what is climbing during it.
 
 ### 5. What changes inside: norm and Fourier structure
 
@@ -955,7 +959,7 @@ the training costs are the wall-clock the committed run logs actually recorded
 (`wall_seconds` in `runs*/`, Apple Silicon MPS) rather than estimates:
 
 ```bash
-pytest                              # 298 tests
+pytest                              # 300 tests
 python experiments/run_sweep.py     # §1-2 26 runs (5 seeds x 5 cells + 1), 2.6 h — resumable
 python experiments/lr_sweep.py      # §3 learning-rate robustness (3 runs, 4.5 min)
 python experiments/modulus_scaling.py  # §4 p = 113 (1 run, 45 s; p = 97 reuses the sweep)

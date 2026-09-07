@@ -250,6 +250,73 @@ def test_the_surface_table_matches_the_runs_including_its_censoring():
                 assert text == cell(steps), f"({frac}, {wd}): {text!r}"
 
 
+# --- the intro and Sec. 4's climb ------------------------------------------
+#
+# The intro said the model "stays near ~20% test accuracy for ~1,300 steps",
+# which is two errors in one clause. 1,300 is the grok *step*; the delay is
+# 1,200 -- the same conflation the paper's abstract carried until it was read
+# against the logs, and it survived here because the intro is not a table.
+# And "stays near ~20%" is what Sec. 4 exists to refute: 20% is roughly seed
+# 0's memorization value, seed 0 is the lowest of the five, and every seed
+# climbs from there. Sec. 4's own replacement clause was wrong too, quoting
+# 0.377-0.557 for the last eval before the jump where the runs say 0.924-0.988.
+
+MAIN = [f"p97_frac0.30_wd1_seed{i}" for i in range(5)]
+
+
+def flat(text):
+    """One line, so a claim can be checked without knowing where it wrapped."""
+    return " ".join(text.split())
+
+
+def intro():
+    """The text above the first `##` heading."""
+    return README.split("\n## ", 1)[0]
+
+
+def test_the_intro_separates_the_grok_step_from_the_length_of_the_delay():
+    steps = [summary(n)["grok_step"] for n in MAIN]
+    assert all(s is not None for s in steps)
+    assert {summary(n)["memorize_step"] for n in MAIN} == {100}
+    median = sorted(steps)[2]
+    delay = median - 100
+    assert (median, delay) == (1300, 1200)
+    text = flat(intro())
+    assert f"**{delay:,} steps**" in text, f"the delay is {delay:,} steps"
+    assert f"**grok step of {median:,}**" in text
+    assert f"{median:,} steps" not in text, (
+        "the intro is quoting the grok step as the length of the delay again"
+    )
+
+
+def _test_accuracy_at(name, step):
+    h = history(name)
+    return h["test_acc"][h["step"].index(step)]
+
+
+def _last_eval_before_grok(name):
+    h = history(name)
+    grok = summary(name)["grok_step"]
+    return max(a for s, a in zip(h["step"], h["test_acc"]) if s < grok)
+
+
+def test_the_delay_is_a_climb_and_both_places_that_say_so_quote_the_runs():
+    at_memorization = [_test_accuracy_at(n, 100) for n in MAIN]
+    mean = sum(at_memorization) / len(at_memorization)
+    lo, hi = min(at_memorization), max(at_memorization)
+    before = [_last_eval_before_grok(n) for n in MAIN]
+
+    # the claim itself: nobody is near 20% by the time it jumps
+    assert min(before) > 3 * mean
+
+    quoted = f"{mean:.3f} [{lo:.3f}–{hi:.3f}]"
+    climb = f"{min(before):.3f}–{max(before):.3f}"
+    assert quoted == "0.247 [0.163–0.302]"
+    for where, text in (("the intro", intro()), ("Sec. 4", section("4. Does the delay"))):
+        assert quoted in flat(text), f"{where} no longer quotes {quoted}"
+        assert climb in flat(text), f"{where} should say the climb reaches {climb}"
+
+
 # --- the counts the README quotes about the repo itself -------------------
 #
 # Everything above recomputes a measurement from a log. These two do not:
