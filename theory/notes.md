@@ -10,9 +10,9 @@ supervised at the "=" position. The dataset is the full universe of $p^2 = 9409$
 ordered pairs; training sees a random fraction $f$, and the test set is the
 exact complement. Three properties make this the canonical grokking probe:
 
-1. **Noiseless and exhaustive** — generalization can only mean *recovering
+1. **Noiseless and exhaustive**: generalization can only mean *recovering
    the algorithm*, not interpolating noise. Chance is $1/p \approx 1\%$.
-2. **A capacity gap that permits memorization** — our model has ~420k
+2. **A capacity gap that permits memorization**: our model has ~420k
    parameters against ~2.8k training examples at $f = 0.3$: memorizing is
    easy, so the interesting question is what makes the network ever prefer
    the general solution.
@@ -57,21 +57,21 @@ $$\cos(\omega(a+b)) = \cos\omega a \cos\omega b - \sin\omega a \sin\omega b,
 \qquad
 \sin(\omega(a+b)) = \sin\omega a\cos\omega b + \cos\omega a \sin\omega b$$
 
-turn *addition of tokens* into *multiplication of features* — exactly what
+turn *addition of tokens* into *multiplication of features*, exactly what
 attention (bilinear in the residual stream) and the MLP nonlinearity can
 implement. Scoring answer $c$ by
 
 $$\text{logit}(c) \;\propto\; \sum_{k \in K} \cos\!\big(\tfrac{2\pi k}{p}(a + b - c)\big)$$
 
 is maximized at $c \equiv a + b \pmod p$. With **all** frequencies this is
-the DFT delta identity — the geometric series
+the DFT delta identity: the geometric series
 $\sum_{k=0}^{p-1} e^{2\pi i k n / p}$ sums to $p$ when $n \equiv 0 \pmod p$
 and to $\frac{1 - e^{2\pi i n}}{1 - e^{2\pi i n/p}} = 0$ otherwise, so
 
 $$\sum_{k=0}^{p-1} \cos\!\big(\tfrac{2\pi k n}{p}\big) = p\,\delta_{n \equiv 0 \bmod p}.$$
 
 A *sparse* subset $K$ of frequencies keeps the peak at $|K|$ while off-target
-values, sums of cosines at distinct nonzero phases, stay well below it —
+values, sums of cosines at distinct nonzero phases, stay well below it,
 sufficient for argmax. Trained networks empirically use $|K| \approx 4$–$6$.
 
 **Testable signature.** Take the digit-embedding matrix
@@ -85,7 +85,7 @@ the memorization-point checkpoint and the final checkpoint of the same run.
 
 **The phenomenon** (Power et al. 2022): with a small training fraction and
 weight decay, train accuracy reaches 100% early while test accuracy sits at
-chance for thousands of further steps — then jumps to ~100%. The gap between
+chance for thousands of further steps, then jumps to ~100%. The gap between
 memorization and generalization can span orders of magnitude in step count.
 
 **Why would a fully-memorized network keep changing?** The training loss is
@@ -94,9 +94,9 @@ every parameter. Among solutions with zero training error, the dynamics
 therefore drift toward *small-norm* ones. The memorization solution stores
 ~2.8k arbitrary input–output pairs and pays for each; the Fourier circuit is
 one reusable algorithm whose cost doesn't scale with the training set. So
-the general solution is the norm-efficient one, and the trajectory —
-memorize fast (steepest descent on loss), then slowly rotate weight mass
-into the efficient circuit while loss stays pinned near zero — predicts both
+the general solution is the norm-efficient one, and the trajectory
+(memorize fast (steepest descent on loss), then slowly rotate weight mass
+into the efficient circuit while loss stays pinned near zero) predicts both
 the delay and the weight-norm decline during the transition (Liu et al.
 2023 "Omnigrok"; Varma et al. 2023 frame it as circuit efficiency;
 Nanda et al. 2023 measure the circuit forming *gradually* before the
@@ -110,7 +110,7 @@ not a discontinuity in the weights).
   within budget, and time-to-grok should fall as wd rises.
 - **Data-fraction sweep** ($f$ ∈ {0.25, 0.30, 0.40, 0.60} at wd = 1). The
   smaller the training set, the cheaper pure memorization (fewer pairs to
-  store) relative to the fixed-cost general circuit — so the delay should
+  store) relative to the fixed-cost general circuit, so the delay should
   grow as $f$ shrinks, diverging near a critical fraction where the general
   circuit stops being reachable/preferred.
 - **Fourier + norm instrumentation.** Generalization should co-occur with
@@ -122,8 +122,8 @@ not a discontinuity in the weights).
 - **Five seeds, not a distribution.** The wd and frac cells are run at seeds
   0–4 and reported as median [min–max]; the between-cell gaps survive that
   spread (the slowest wd = 1 seed groks before the fastest wd = 0.1 one), but
-  five draws bound nothing. The later single-seed studies — head count
-  (README §9) and the operation sweep at wd 0.1 — say so where they appear,
+  five draws bound nothing. The later single-seed studies (head count
+  (README §9) and the operation sweep at wd 0.1) say so where they appear,
   and the operations table was subsequently re-run at three seeds, which
   retracted one of its seed-0 readings.
 - **One task, one architecture.** Grokking appears across tasks and even in
@@ -148,7 +148,7 @@ typical off-target size of $\sum_{k \in K} \cos(2\pi k n/p)$?
 
 <details><summary>Solution</summary>
 
-At $n = 0$ every cosine is 1, so the sum is exactly $m$ — the peak is
+At $n = 0$ every cosine is 1, so the sum is exactly $m$: the peak is
 unaffected by dropping frequencies. For $n \neq 0$ the phases $2\pi k n/p$
 are spread around the circle, and a cosine of an (effectively) uniform angle
 has mean 0 and variance $1/2$, so a sum of $m$ near-independent such terms has
@@ -162,7 +162,7 @@ five frequencies already give $\sqrt{10} \approx 3.2$ standard deviations.
 
 For the trained model's own $K = \{5, 14, 20, 36, 38\}$ at $p = 97$: peak
 5.000, off-target sd 1.512 against a predicted 1.581, largest off-target value
-2.677 — so the correct answer wins by a factor of 1.87, and
+2.677, so the correct answer wins by a factor of 1.87, and
 `logits.argmax` is right for all $97^2$ pairs. Note what the margin is *not*:
 the off-target values are not small (the largest is more than half the peak).
 Argmax does not need them to be.
@@ -177,7 +177,7 @@ Checked in `tests/test_theory_exercises.py`
 
 **Exercise 2.** Sec. 3 asserts that the algorithm makes the logit tensor
 $L[a,b,c]$ a function of $a+b$. Show that this puts *all* of its Fourier
-energy on the diagonal $k_a = k_b$ of the 2D DFT over the input axes — the
+energy on the diagonal $k_a = k_b$ of the 2D DFT over the input axes, the
 measurement `experiments/logit_attribution.py` reports.
 
 <details><summary>Solution</summary>
@@ -188,7 +188,7 @@ $\omega = 2\pi k/p$:
 $$\cos(\omega(a+b-c)) = \big[\cos\omega a\,\cos\omega b - \sin\omega a\,\sin\omega b\big]\cos\omega c + \big[\sin\omega a\,\cos\omega b + \cos\omega a\,\sin\omega b\big]\sin\omega c.$$
 
 Every bracket is a sum of **products of a pure frequency-$k$ function of $a$
-with a pure frequency-$k$ function of $b$** — this is exactly why the
+with a pure frequency-$k$ function of $b$**: this is exactly why the
 architecture can compute it, since attention and the MLP supply the
 multiplication, and it is also the answer. A product $f(a)g(b)$ has 2D DFT
 $\hat f \otimes \hat g$, and $\hat f, \hat g$ are supported on $\{\pm k\}$, so
@@ -201,7 +201,7 @@ and such functions are precisely those whose 2D DFT lives on the diagonal.
 
 The ideal tensor puts $1.0000000000$ of its non-DC energy on those modes. That
 is the reference the grokked model's **0.98** and the memorizing model's
-**0.12** (README §8) are read against — the trained network is not
+**0.12** (README §8) are read against: the trained network is not
 approximately doing this, it is doing it to two digits.
 
 Checked in `test_the_ideal_logit_tensor_lives_exactly_on_the_diagonal_modes`.
@@ -224,7 +224,7 @@ and the $1/\sqrt{d_{\text{head}}}$ leaves
 
 $$\operatorname{sd}(z) = \sigma_W^2 d_{\text{model}} = 0.02^2 \times 128 = 0.0512,$$
 
-with **no $d_{\text{head}}$ in it** — the scaling cancels the head split
+with **no $d_{\text{head}}$ in it**: the scaling cancels the head split
 exactly. So 1, 2 and 4 heads all start at the same attention temperature,
 which is worth knowing next to README §9's head-count ablation: whatever
 makes more heads grok more slowly, it is not a different starting point.
@@ -247,22 +247,22 @@ per-seed agreement is only within ~30%.
 *(c) What the appendix statistic measures.* The appendix reports the
 asymmetry **after averaging over the dataset**: init 0.004–0.017, memorization
 0.189, grokked 0.0001. Write $D(a,b) = A[(a,b) \to \text{pos }0] - A[(a,b) \to \text{pos }1]$.
-If the "=" token's attention follows the *token* rather than the position —
-i.e. the computation is equivariant under swapping the operands — then
+If the "=" token's attention follows the *token* rather than the position,
+i.e. the computation is equivariant under swapping the operands, then
 $A[(b,a) \to \text{pos }0] = A[(a,b) \to \text{pos }1]$, so $D(b,a) = -D(a,b)$.
 $D$ is **odd** under the swap, and the dataset is every ordered pair and hence
 closed under it, so the average is exactly zero.
 
 So the statistic is a measure of *swap-equivariance*, not of "each input is
-read symmetrically" — and the distinction is not academic, because the grokked
+read symmetrically", and the distinction is not academic, because the grokked
 model does **not** read individual inputs symmetrically: its per-example
 $\mathbb{E}|D|$ is 0.15, eight times the value at initialization. Measuring
 the equivariance defect directly,
 $\mathbb{E}\big|A[(a,b) \to a] - A[(b,a) \to b]\big|$, gives 0.189 at
 memorization and 0.00017 after grokking, and the symmetry reaches the output:
 the memorizing model's logits change by 0.61 of their own standard deviation
-when the operands are swapped — it genuinely computes a non-commutative
-function — against 0.004 for the grokked one. Commutativity is learned, and it
+when the operands are swapped (it genuinely computes a non-commutative
+function) against 0.004 for the grokked one. Commutativity is learned, and it
 is learned at grokking.
 
 Checked in `test_the_delta_method_softmax_variances_are_right_for_independent_logits`,
@@ -275,7 +275,7 @@ Checked in `test_the_delta_method_softmax_variances_are_right_for_independent_lo
 
 **Exercise 4.** `grokking/progress.py` reports "the fraction of embedding
 Fourier energy in the top $k$ frequencies". Show that this is a statement
-about the embedding and not about the transform — and find the one thing in
+about the embedding and not about the transform, and find the one thing in
 that module that a factor of 2 *would* make wrong.
 
 <details><summary>Solution</summary>
@@ -284,8 +284,8 @@ Parseval for the DFT of a real $p \times d$ matrix $E$ along the token axis:
 
 $$\sum_{n=0}^{p-1} \\|E_n - \bar E\\|^2 = \frac1p \sum_{k=1}^{p-1} \\|\hat E_k\\|^2 = \frac2p \sum_{k=1}^{(p-1)/2} \\|\hat E_k\\|^2$$
 
-for odd $p$, the last step by conjugate symmetry $\hat E_{p-k} = \overline{\hat E_k}$
-— which is exactly the half-spectrum a real FFT returns. Subtracting the mean
+for odd $p$, the last step by conjugate symmetry $\hat E_{p-k} = \overline{\hat E_k}$,
+which is exactly the half-spectrum a real FFT returns. Subtracting the mean
 is the same as dropping $k = 0$. So the non-DC spectrum accounts for precisely
 the centred embedding energy, nothing more and nothing missing, and a
 *fraction* of it is a fraction of a real quantity. Verified to 1e-10 on both
@@ -298,7 +298,7 @@ that function is half the true one. The measure is right; a number lifted out
 of it would not be.
 
 Aside, since the spectrum already computes it: the centred embedding energy
-falls from 7.59 at memorization to 1.14 at the end — Sec. 4's norm pressure,
+falls from 7.59 at memorization to 1.14 at the end: Sec. 4's norm pressure,
 visible in the embedding table alone.
 
 Checked in `test_the_embedding_spectrum_accounts_for_exactly_the_centred_energy`,
@@ -309,7 +309,7 @@ Checked in `test_the_embedding_spectrum_accounts_for_exactly_the_centred_energy`
 ---
 
 **Exercise 5.** README §11 finds that $(a \cdot b) \bmod p$ groks too. Explain
-why that is not a separate phenomenon — and then say what the explanation does
+why that is not a separate phenomenon, and then say what the explanation does
 *not* account for.
 
 <details><summary>Solution</summary>
@@ -327,14 +327,14 @@ Now the part that does not follow. The seed-0 run made multiplication look
 *fastest*, and the tempting story was that 96 is highly composite ($2^5 \cdot 3$)
 while 97 is prime, so the multiplicative task has more usable subgroup
 structure. Three seeds retracted it: mul groks at 1,100 [1,000–1,500] and add
-at 1,300 [1,200–1,900] — overlapping ranges, no effect to explain. And the
+at 1,300 [1,200–1,900]: overlapping ranges, no effect to explain. And the
 isomorphism cannot be the operative variable anyway, because addition and
 subtraction share a group exactly and differ decisively (sub 3,700
 [2,500–3,900], and at wd 0.1 it groks in only one seed of three).
 
 So: the isomorphism explains why multiplication groks **at all**, and explains
 nothing about speed. The surviving hypothesis for the subtraction gap is
-commutativity — subtraction is the only non-commutative operation of the
+commutativity: subtraction is the only non-commutative operation of the
 three, and Exercise 3 shows the addition model spends its grokking transition
 acquiring exactly that symmetry, which a subtraction model cannot use.
 
@@ -343,7 +343,7 @@ subtraction checkpoints (README §11, `experiments/swap_equivariance.py`), with
 one generalization it needed: subtraction cannot be *invariant* under the swap,
 so the statistic to ask it about is *anti*-equivariance, $L(a,b) = L(b,a)[-c]$,
 which is what $a-b = -(b-a)$ licenses. Grokking turns out to acquire whichever
-of the two the operation has — addition's invariance defect falls to 0.010
+of the two the operation has: addition's invariance defect falls to 0.010
 while subtraction's *rises* to the no-symmetry level and its anti-equivariance
 defect falls 3.8× instead. So commutativity survives as the distinguishing
 property. What it does not yet explain is why subtraction's version of the
